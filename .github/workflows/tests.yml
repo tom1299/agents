@@ -1,0 +1,46 @@
+name: tests
+
+on:
+  push:
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - "agents-common/pyproject.toml"
+      - "agents-common/**/*.py"
+      - "agents/**/pyproject.toml"
+      - "agents/**/*.py"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: agents-common
+            tests: agents-common/tests
+            top: agents-common
+          - project: agents/sample-agent
+            tests: agents/sample-agent/tests
+            top: agents/sample-agent
+          - project: agents/agent-tools
+            tests: agents/agent-tools/tests
+            top: agents/agent-tools
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync workspace member
+        run: uv sync --project "${{ matrix.project }}" --frozen
+
+      - name: Run tests
+        run: uv run --project "${{ matrix.project }}" python -m unittest discover -s "${{ matrix.tests }}" -t "${{ matrix.top }}"

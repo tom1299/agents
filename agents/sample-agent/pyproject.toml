@@ -1,0 +1,17 @@
+[project]
+name = "sample-agent"
+version = "0.1.0"
+description = "Sample agent application"
+
+requires-python = ">=3.13"
+dependencies = ["agents-common"]
+
+[project.scripts]
+sample-agent = "sample_agent.main:main"
+
+[tool.uv.sources]
+agents-common = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"

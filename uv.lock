@@ -1,0 +1,37 @@
+version = 1
+revision = 3
+requires-python = ">=3.13"
+
+[manifest]
+members = [
+    "agent-tools",
+    "agents-common",
+    "agents-workspace",
+    "sample-agent",
+]
+
+[[package]]
+name = "agent-tools"
+version = "0.1.0"
+source = { editable = "agents/agent-tools" }
+
+[[package]]
+name = "agents-common"
+version = "0.1.0"
+source = { editable = "agents-common" }
+
+[[package]]
+name = "agents-workspace"
+version = "0.1.0"
+source = { virtual = "." }
+
+[[package]]
+name = "sample-agent"
+version = "0.1.0"
+source = { editable = "agents/sample-agent" }
+dependencies = [
+    { name = "agents-common" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "agents-common", editable = "agents-common" }]
