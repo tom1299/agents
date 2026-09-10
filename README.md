@@ -24,3 +24,11 @@ uv sync --project agents/<agent-name>
 ```
 
 Use `uv run --project agents/<agent-name> <command>` to run it.
+
+## Add module to a member project
+Example for langchain
+```bash
+uv add --package agents-common "langchain==1.4.0"
+uv lock
+uv sync --project agents-common --frozen
+```
