@@ -21,12 +21,14 @@ version = "0.1.0"
 source = { editable = "agents-common" }
 dependencies = [
     { name = "langchain" },
+    { name = "langchain-core" },
     { name = "langchain-openai" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "langchain", specifier = "==1.4.0" },
+    { name = "langchain-core", specifier = ">=1.6.2" },
     { name = "langchain-openai", specifier = "==1.6.2" },
 ]
 
@@ -34,12 +36,6 @@ requires-dist = [
 name = "agents-workspace"
 version = "0.1.0"
 source = { virtual = "." }
-dependencies = [
-    { name = "langchain-core" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "langchain-core", specifier = ">=1.6.2" }]
 
 [[package]]
 name = "annotated-types"
