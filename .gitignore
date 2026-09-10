@@ -13,3 +13,5 @@ wheelhouse/
 # Local tooling
 .idea/
 .DS_Store
+
+.env

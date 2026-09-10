@@ -29,6 +29,7 @@ Use `uv run --project agents/<agent-name> <command>` to run it.
 Example for langchain
 ```bash
 uv add --package agents-common "langchain==1.4.0"
+uv add --package agents-common "langchain-openai==1.6.2"
 uv lock
 uv sync --project agents-common --frozen
 ```
