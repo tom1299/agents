@@ -2,8 +2,13 @@ import os
 
 import tempfile
 import unittest
+from pathlib import Path
 
-from agent_tools.git import clone_repository
+from agent_tools.git import clone_repository, get_file_commit_history, get_commit_details_from_history
+
+TEST_DATA_DIR = (
+    Path(__file__).resolve().parent / "test-data" / "kubernetes-website"
+)
 
 class GitTest(unittest.TestCase):
 
@@ -40,3 +45,29 @@ class GitTest(unittest.TestCase):
         finally:
             os.environ["GIT_USERNAME"] = original_git_username
             os.environ["GIT_TOKEN"] = original_git_token
+
+@unittest.skipUnless(
+    TEST_DATA_DIR.exists(),
+    "Missing test data: tests/test-data/kubernetes-website",
+)
+class GitFileHistoryTest(unittest.TestCase):
+
+    def test_get_file_commit_history(self) -> None:
+        repo_path = TEST_DATA_DIR
+        since = "1 year ago"
+        file_path = "content/en/docs/concepts/services-networking/service.md"
+
+        commit_history = get_file_commit_history.func(repo_path, since, file_path)
+
+        commit_lines = [line for line in commit_history.splitlines() if line.startswith("commit ")]
+        self.assertEqual(len(commit_lines), 10, f"Expected 10 commits in the history, but found {len(commit_lines)}.")
+
+    def test_get_commit_details_from_history(self):
+        repo_path = TEST_DATA_DIR
+        since = "1 year ago"
+        file_path = "content/en/docs/concepts/services-networking/service.md"
+
+        commit_history = get_file_commit_history.func(repo_path, since, file_path)
+        commit_details_list = get_commit_details_from_history.func(commit_history)
+
+        self.assertEqual(len(commit_details_list), 10, f"Expected 10 commit details, but found {len(commit_details_list)}.")

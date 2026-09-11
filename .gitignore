@@ -15,3 +15,4 @@ wheelhouse/
 .DS_Store
 
 .env
+agents/agent-tools/tests/test-data
