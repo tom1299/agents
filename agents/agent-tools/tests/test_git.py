@@ -4,7 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_tools.git import clone_repository, get_file_commit_history, get_commit_details_from_history
+from agent_tools.git import clone_repository, get_file_commit_history, get_commit_details_from_history, \
+    create_change_from_commit_detail, Change
 
 TEST_DATA_DIR = (
     Path(__file__).resolve().parent / "test-data" / "kubernetes-website"
@@ -71,3 +72,26 @@ class GitFileHistoryTest(unittest.TestCase):
         commit_details_list = get_commit_details_from_history.func(commit_history)
 
         self.assertEqual(len(commit_details_list), 10, f"Expected 10 commit details, but found {len(commit_details_list)}.")
+
+    def test_create_change_from_commit_detail(self):
+        repo_path = TEST_DATA_DIR
+        since = "1 year ago"
+        file_path = "content/en/docs/concepts/services-networking/service.md"
+
+        commit_history = get_file_commit_history.func(repo_path, since, file_path)
+        commit_details_list = get_commit_details_from_history.func(commit_history)
+
+        for commit_detail in commit_details_list:
+            change: Change = create_change_from_commit_detail.func(commit_detail)
+            assert change.commit_hash is not None, "Expected commit_hash to be set in Change object."
+            assert change.date is not None, "Expected date to be set in Change object."
+            assert change.changes is not None, "Expected changes to be set in Change object."
+            assert change.commit_message is not None, "Expected commit_message to be set in Change object."
+
+            # Selectively check one commit
+            if change.commit_hash == "854aaf863c572486e8998060294c4d858dc74101":
+                expected_date_str = "Wed Jan 07 04:12:28 2026 +0000"
+                expected_date = change.date.strftime("%a %b %d %H:%M:%S %Y %z")
+                self.assertEqual(expected_date, expected_date_str, f"Expected date to be {expected_date_str}, but got {expected_date}.")
+
+                self.assertTrue("Fix ordering of Service and Pod in Port definitions example" in change.commit_message)

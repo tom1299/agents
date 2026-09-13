@@ -4,11 +4,22 @@ import re
 import subprocess
 import sysconfig
 
+from datetime import datetime
+from enum import Enum
 from pathlib import Path
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+class Change(BaseModel):
+    commit_hash: str
+    date: datetime
+    changes: str
+    commit_message: str
+    size: int = Field(ge=0, le=10)
+    semantic_impact: int = Field(ge=0, le=10)
 
 @tool("is_git_available",
     description="Checks if Git is available on the system."
@@ -101,5 +112,71 @@ def get_commit_details_from_history(commit_history: str) -> list[str]:
      The `RelaxedServiceNameValidation` feature gate allows Service object names to start with a digit. When this feature gate is enabled, Service object names must be valid [RFC 1123 label names](/docs/concepts/overview/working-with-objects/names/#dns-label-names).
 
     """
-    commits_details = re.split(r"(?m)^commit [0-9a-f]+\n", commit_history)
-    return [commit_detail.strip() for commit_detail in commits_details if commit_detail.strip()]
+    # commits_details = re.split(r"(?m)^commit [0-9a-f]+\n", commit_history)
+    # return [commit_detail.strip() for commit_detail in commits_details if commit_detail.strip()]
+    commits = re.findall(
+        r"(?ms)^commit [0-9a-f]+\n.*?(?=^commit [0-9a-f]+\n|\Z)",
+        commit_history,
+    )
+    return [commit.strip() for commit in commits if commit.strip()]
+
+@tool(
+    "create_change_from_commit_detail",
+    description="Creates a Change object from a single commit detail string. See function `get_commit_details_from_history` for how to get the commit details. Size and semantic_impact are not calculated.",
+)
+def create_change_from_commit_detail(commit_detail: str) -> Change:
+    """Create a Change object from a single commit detail string."""
+    # TODO: Change this to not use regular expression but rather do it line by line.
+
+    lines = commit_detail.splitlines()
+    commit_hash: str = None
+    date: datetime = None
+    changes: str = None
+    commit_message: str = ""
+
+    for i in range(len(lines)):
+        if i == 0:
+            commit_hash = re.match(r"^commit ([0-9a-f]+)", lines[i]).group(1)
+        elif i == 2:
+            date_string = re.match(r"^Date:\s+(.*)$", lines[i]).group(1).strip()
+            date = datetime.strptime(date_string, "%a %b %d %H:%M:%S %Y %z")
+        elif i >= 4 and not lines[i].startswith("diff --git"):
+            commit_message = commit_message + lines[i] + "\n"
+        elif lines[i].startswith("diff --git"):
+            changes = "\n".join(lines[i:])
+            break
+
+    if not (commit_hash and date and changes and commit_message):
+        raise ValueError("Invalid commit detail format")
+
+    # For simplicity, we can set size and semantic_impact to 0 for now.
+    return Change(commit_hash=commit_hash, date=date, changes=changes, commit_message=commit_message, size=0, semantic_impact=0)
+
+def get_content_before_and_after_commit(repo_path: str, file_path: str, commit_hash: str) -> tuple[str, str]:
+    # TODO: Verify code
+    # Compare with:
+    # git show 90d449e0c3fa65cdcf61dac336121f5586644157^:content/en/docs/concepts/services-networking/service.md
+    """Get the content of a file before and after a specific commit."""
+    # Get the content of the file before the commit
+    result_before = subprocess.run(
+        ["git", "show", f"{commit_hash}~1:{file_path}"],
+        check=True,
+        cwd=repo_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    content_before = result_before.stdout
+
+    # Get the content of the file after the commit
+    result_after = subprocess.run(
+        ["git", "show", f"{commit_hash}:{file_path}"],
+        check=True,
+        cwd=repo_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    content_after = result_after.stdout
+
+    return content_before, content_after

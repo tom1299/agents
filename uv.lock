@@ -16,10 +16,14 @@ version = "0.1.0"
 source = { editable = "agents/agent-tools" }
 dependencies = [
     { name = "langchain-core" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "langchain-core", specifier = ">=1.6.2" }]
+requires-dist = [
+    { name = "langchain-core", specifier = ">=1.6.2" },
+    { name = "pydantic", specifier = ">=2.13.5" },
+]
 
 [[package]]
 name = "agents-common"
