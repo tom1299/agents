@@ -60,7 +60,7 @@ class GitFileHistoryTest(unittest.TestCase):
 
         commit_history = get_file_commit_history.func(repo_path, since, file_path)
 
-        commit_lines = [line for line in commit_history.splitlines() if line.startswith("commit ")]
+        commit_lines = [line for line in commit_history.splitlines() if line.startswith("commit:")]
         self.assertEqual(len(commit_lines), 10, f"Expected 10 commits in the history, but found {len(commit_lines)}.")
 
     def test_get_commit_details_from_history(self):
@@ -94,4 +94,7 @@ class GitFileHistoryTest(unittest.TestCase):
                 expected_date = change.date.strftime("%a %b %d %H:%M:%S %Y %z")
                 self.assertEqual(expected_date, expected_date_str, f"Expected date to be {expected_date_str}, but got {expected_date}.")
 
-                self.assertTrue("Fix ordering of Service and Pod in Port definitions example" in change.commit_message)
+                self.assertTrue("Fix ordering of Service and Pod in Port definitions example" in change.subject)
+            elif change.commit_hash == "434ae53916eca3e50394ffb47320b0908d41fe3f":
+                self.assertTrue(change.commit_message.startswith("Switches the existing"))
+                self.assertTrue(all(s in change.commit_message for s in ["feature-state shortcode", "across the docs."]))

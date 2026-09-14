@@ -4,7 +4,7 @@ import re
 import subprocess
 import sysconfig
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
@@ -17,6 +17,7 @@ class Change(BaseModel):
     commit_hash: str
     date: datetime
     changes: str
+    subject: str
     commit_message: str
     size: int = Field(ge=0, le=10)
     semantic_impact: int = Field(ge=0, le=10)
@@ -66,9 +67,12 @@ def clone_repository(repo_url: str, destination_path: str) -> bool:
     description="Returns git log output with patches for a file in a local repository.",
 )
 def get_file_commit_history(repo_path: str, since: str, file_path: str) -> str:
-    """Return `git log --follow -p` output for a file in a local repository."""
+    """Return `git log --no-color --follow -p -U20 --since="1 year ago" --format=commit:%H%n%at%n%s%n%b"` output for a file in a local repository."""
     result = subprocess.run(
-        ["git", "log", "--follow", "-p", f"--since={since}", "--", file_path],
+        ["git", "log", "--ignore-blank-lines", "--ignore-all-space", "--ignore-space-change",
+            "--stat", "--no-color", "--follow", "-p", f"--since={since}",
+            "--format=commit:%H%n%at%n%s%n%b",
+            "--", file_path],
         check=True,
         cwd=repo_path,
         stdout=subprocess.PIPE,
@@ -88,34 +92,9 @@ def get_commit_details_from_history(commit_history: str) -> list[str]:
     See function `get_file_commit_history` for how to get the commit history.
 
     Output is a list of strings, each string containing the details of a single commit.
-    Example of a single commit detail string:
-
-    commit 7aad1e45e9a63de8009022bdc79201f8ef0a2a93
-    Author: Kotaro Inoue <k.musaino@gmail.com>
-    Date:   Sun Sep 21 21:05:57 2025 +0900
-
-        Use feature_gate_name for embedding feature state
-
-        Co-authored-by: Dipesh Rawat <rawat.dipesh@gmail.com>
-
-    diff --git a/content/en/docs/concepts/services-networking/service.md b/content/en/docs/concepts/services-networking/service.md
-    index eb49b1b91d..d9e3d1670f 100644
-    --- a/content/en/docs/concepts/services-networking/service.md
-    +++ b/content/en/docs/concepts/services-networking/service.md
-    @@ -132,7 +132,7 @@ field.
-
-     ### Relaxed naming requirements for Service objects
-
-    -{{< feature-state for_k8s_version="v1.34" state="alpha" >}}
-    +{{< feature-state feature_gate_name="RelaxedServiceNameValidation" >}}
-
-     The `RelaxedServiceNameValidation` feature gate allows Service object names to start with a digit. When this feature gate is enabled, Service object names must be valid [RFC 1123 label names](/docs/concepts/overview/working-with-objects/names/#dns-label-names).
-
     """
-    # commits_details = re.split(r"(?m)^commit [0-9a-f]+\n", commit_history)
-    # return [commit_detail.strip() for commit_detail in commits_details if commit_detail.strip()]
     commits = re.findall(
-        r"(?ms)^commit [0-9a-f]+\n.*?(?=^commit [0-9a-f]+\n|\Z)",
+        r"(?ms)^commit:[0-9a-f]+\n.*?(?=^commit:[0-9a-f]+\n|\Z)",
         commit_history,
     )
     return [commit.strip() for commit in commits if commit.strip()]
@@ -126,31 +105,25 @@ def get_commit_details_from_history(commit_history: str) -> list[str]:
 )
 def create_change_from_commit_detail(commit_detail: str) -> Change:
     """Create a Change object from a single commit detail string."""
-    # TODO: Change this to not use regular expression but rather do it line by line.
 
     lines = commit_detail.splitlines()
-    commit_hash: str = None
-    date: datetime = None
+    commit_hash: str = re.match(r"^commit:([0-9a-f]+)$", lines[0]).group(1)
+    date: datetime = datetime.fromtimestamp(int(lines[1]), tz=timezone.utc)
+    subject: str = lines[2]
     changes: str = None
     commit_message: str = ""
 
-    for i in range(len(lines)):
-        if i == 0:
-            commit_hash = re.match(r"^commit ([0-9a-f]+)", lines[i]).group(1)
-        elif i == 2:
-            date_string = re.match(r"^Date:\s+(.*)$", lines[i]).group(1).strip()
-            date = datetime.strptime(date_string, "%a %b %d %H:%M:%S %Y %z")
-        elif i >= 4 and not lines[i].startswith("diff --git"):
-            commit_message = commit_message + lines[i] + "\n"
-        elif lines[i].startswith("diff --git"):
-            changes = "\n".join(lines[i:])
+    for i in range(3, len(lines)):
+        if lines[i].startswith("---"):
+            changes = "\n".join(lines[i+1:])
             break
+        commit_message += lines[i] + "\n"
 
-    if not (commit_hash and date and changes and commit_message):
+    if not (commit_hash and date and subject and changes and commit_message):
         raise ValueError("Invalid commit detail format")
 
     # For simplicity, we can set size and semantic_impact to 0 for now.
-    return Change(commit_hash=commit_hash, date=date, changes=changes, commit_message=commit_message, size=0, semantic_impact=0)
+    return Change(commit_hash=commit_hash, date=date, subject=subject, changes=changes, commit_message=commit_message, size=0, semantic_impact=0)
 
 def get_content_before_and_after_commit(repo_path: str, file_path: str, commit_hash: str) -> tuple[str, str]:
     # TODO: Verify code
