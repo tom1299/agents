@@ -1,0 +1,17 @@
+[project]
+name = "git-agent"
+version = "0.1.0"
+description = "Agent(s) for git history analysis"
+
+requires-python = ">=3.13"
+dependencies = ["agents-common", "agent-tools"]
+
+[project.scripts]
+
+[tool.uv.sources]
+agents-common = { workspace = true }
+agent-tools = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
