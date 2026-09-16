@@ -5,13 +5,30 @@ import subprocess
 import sysconfig
 
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
+
+def validate_since(value: str, repo_path: str) -> bool:
+    try:
+        subprocess.run(
+            ["git", "rev-parse", f"--since={value}"],
+            check=True,
+            cwd=repo_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+class Classification(BaseModel):
+    size: int | None = Field(default=None, ge=0, le=10)
+    semantic_impact: int | None = Field(default=None, ge=0, le=10)
+    reasoning: str | None = Field(default=None, min_length=1)
 
 class Change(BaseModel):
     commit_hash: str
@@ -19,8 +36,26 @@ class Change(BaseModel):
     changes: str
     subject: str
     commit_message: str
-    size: int = Field(ge=0, le=10)
-    semantic_impact: int = Field(ge=0, le=10)
+    classification: Classification | None = None
+
+class ChangeHistory(BaseModel):
+    repo_path: str = Field(min_length=1)
+    file_path: str = Field(min_length=1)
+    since: str = Field(min_length=1)
+    changes: list[Change]
+
+    @model_validator(mode="after")
+    def validate_model(self):
+        repo_dir = Path(self.repo_path)
+        if not repo_dir.exists():
+            raise ValueError(f"repo_path does not exist: {self.repo_path}")
+        if not (repo_dir / ".git").exists():
+            raise ValueError(f"repo_path is not a git repository: {self.repo_path}")
+        if not (repo_dir / self.file_path).exists():
+            raise ValueError(f"file {self.repo_path + '/' + self.file_path} does not exist")
+        if not validate_since(self.since, self.repo_path):
+            raise ValueError(f"since is not a valid git date: {self.since}")
+        return self
 
 @tool("is_git_available",
     description="Checks if Git is available on the system."
@@ -123,13 +158,32 @@ def create_change_from_commit_detail(commit_detail: str) -> Change:
         raise ValueError("Invalid commit detail format")
 
     # For simplicity, we can set size and semantic_impact to 0 for now.
-    return Change(commit_hash=commit_hash, date=date, subject=subject, changes=changes, commit_message=commit_message, size=0, semantic_impact=0)
+    return Change(commit_hash=commit_hash, date=date, subject=subject, changes=changes, commit_message=commit_message)
 
-def get_content_before_and_after_commit(repo_path: str, file_path: str, commit_hash: str) -> tuple[str, str]:
+@tool(
+    "add_changes",
+    description="Adds the list of changes for a specific file in a local repository since a given date to the ChangeHistory object."
+)
+def add_changes(git_history: ChangeHistory) -> ChangeHistory:
+    """
+    Add the list of changes for a specific file in a local repository since a given date to the ChangeHistory object.
+    :param git_history: ChangeHistory object containing repo_path, file_path, and since.
+    :return: ChangeHistory object with the changes attribute populated.
+    """
+    history = get_file_commit_history.func(git_history.repo_path, git_history.since, git_history.file_path)
+    commit_details = get_commit_details_from_history.func(history)
+    changes = [create_change_from_commit_detail.func(detail) for detail in commit_details]
+    git_history.changes = changes
+    return git_history
+
+@tool(
+    "get_content_before_commit",
+    description="Get the content of a file before a specific commit.")
+def get_content_before_commit(repo_path: str, file_path: str, commit_hash: str) -> str:
     # TODO: Verify code
     # Compare with:
     # git show 90d449e0c3fa65cdcf61dac336121f5586644157^:content/en/docs/concepts/services-networking/service.md
-    """Get the content of a file before and after a specific commit."""
+    """Get the content of a file before a specific commit."""
     # Get the content of the file before the commit
     result_before = subprocess.run(
         ["git", "show", f"{commit_hash}~1:{file_path}"],
@@ -141,6 +195,13 @@ def get_content_before_and_after_commit(repo_path: str, file_path: str, commit_h
     )
     content_before = result_before.stdout
 
+    return content_before
+
+@tool(
+    "get_content_after_commit",
+    description="Get the content of a file after a specific commit.")
+def get_content_after_commit(repo_path: str, file_path: str, commit_hash: str) -> str:
+    """Get the content of a file after a specific commit."""
     # Get the content of the file after the commit
     result_after = subprocess.run(
         ["git", "show", f"{commit_hash}:{file_path}"],
@@ -152,4 +213,4 @@ def get_content_before_and_after_commit(repo_path: str, file_path: str, commit_h
     )
     content_after = result_after.stdout
 
-    return content_before, content_after
+    return content_after
