@@ -28,7 +28,8 @@ def validate_since(value: str, repo_path: str) -> bool:
 class Classification(BaseModel):
     size: int | None = Field(default=None, ge=0, le=10)
     semantic_impact: int | None = Field(default=None, ge=0, le=10)
-    reasoning: str | None = Field(default=None, min_length=1)
+    reason: str | None = Field(default=None, min_length=1)
+
 
 class Change(BaseModel):
     commit_hash: str
