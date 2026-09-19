@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import operator
-import unittest
+import pytest
 
 from pathlib import Path
-from typing import TypedDict, Annotated, NotRequired
-from unittest import skip
+from typing import NotRequired
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import wrap_tool_call
@@ -14,7 +12,6 @@ from langchain_core.messages import ToolMessage
 from langchain.tools.tool_node import ToolCallRequest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
-from openai.types import skill_create_params
 
 from agent_tools.git import add_changes, ChangeHistory, get_content_after_commit, get_content_before_commit
 from git_agent.commit_classification_agent import create_agent
@@ -44,7 +41,7 @@ def tool_invocation_counter_middleware(request: ToolCallRequest, handler) -> Too
     #     }
     # )
 
-class TestCommitClassificationAgent(unittest.TestCase):
+class TestCommitClassificationAgent:
 
     def test_classify_commit_without_change(self):
         # TODO: Examine why endless loop on tool invocation if get before and after commit
@@ -66,7 +63,7 @@ class TestCommitClassificationAgent(unittest.TestCase):
         classified_change = result["structured_response"]
         print(f"Classified change for commit 90d449e0c3fa65cdcf61dac336121f5586644157: {classified_change}, {classified_change.reason}")
 
-    @skip
+    @pytest.mark.skip
     def test_classify_commit(self):
         repo_path = TEST_DATA_DIR
         since = "1 year ago"

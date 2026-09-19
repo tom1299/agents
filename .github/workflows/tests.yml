@@ -23,13 +23,12 @@ jobs:
         include:
           - project: agents-common
             tests: agents-common/tests
-            top: agents-common
           - project: agents/sample-agent
             tests: agents/sample-agent/tests
-            top: agents/sample-agent
+          - project: agents/git-agent
+            tests: agents/git-agent/tests
           - project: agents/agent-tools
             tests: agents/agent-tools/tests
-            top: agents/agent-tools
 
     steps:
       - name: Check out code
@@ -47,4 +46,4 @@ jobs:
         run: uv sync --project "${{ matrix.project }}" --frozen
 
       - name: Run tests
-        run: uv run --project "${{ matrix.project }}" python -m unittest discover -s "${{ matrix.tests }}" -t "${{ matrix.top }}"
+        run: uv run --project "${{ matrix.project }}" pytest "${{ matrix.tests }}"
