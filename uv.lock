@@ -20,11 +20,19 @@ dependencies = [
     { name = "pydantic" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "langchain-core", specifier = ">=1.6.2" },
     { name = "pydantic", specifier = ">=2.13.5" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
 name = "agents-common"
@@ -227,11 +235,19 @@ dependencies = [
     { name = "agents-common" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "agent-tools", editable = "agents/agent-tools" },
     { name = "agents-common", editable = "agents-common" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
 name = "h11"
@@ -905,11 +921,19 @@ dependencies = [
     { name = "agents-common" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "agent-tools", editable = "agents/agent-tools" },
     { name = "agents-common", editable = "agents-common" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
 name = "sniffio"
