@@ -41,6 +41,10 @@ def tool_invocation_counter_middleware(request: ToolCallRequest, handler) -> Too
     #     }
     # )
 
+@pytest.mark.skipif(
+    not TEST_DATA_DIR.exists(),
+    reason="Missing test data: tests/test-data/kubernetes-website",
+)
 class TestCommitClassificationAgent:
 
     def test_classify_commit_without_change(self):
