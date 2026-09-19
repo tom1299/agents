@@ -2,10 +2,9 @@ import langchain
 
 from agent_tools.git import Classification
 
-def create_agent(middleware: list, tools: list, checkpointer=None):
+def create_agent(model: str, middleware: list, tools: list, checkpointer=None):
     agent_with_middleware = langchain.agents.create_agent(
-        # model="openai:gpt-4o-mini",
-        model="openai:gpt-5.5",
+        model=model,
         tools=tools,
         checkpointer=checkpointer,
         response_format=Classification,

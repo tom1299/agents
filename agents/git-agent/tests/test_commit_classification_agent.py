@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+import uuid
+
 import pytest
 
 from pathlib import Path
 from typing import NotRequired
 
 from langchain.agents import AgentState
-from langchain.agents.middleware import wrap_tool_call
+from langchain.agents.middleware import wrap_tool_call, AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain.tools.tool_node import ToolCallRequest
 from langgraph.checkpoint.memory import InMemorySaver
@@ -26,20 +28,38 @@ TEST_DATA_DIR = (
 )
 
 class TrackingState(AgentState):
-    tool_call_count: NotRequired[int]
+    tool_invocation_count: NotRequired[int]
+
+
+class DisableParallelToolCallsMiddleware(AgentMiddleware):
+
+    def wrap_model_call(self, request, handler):
+        request.model_settings["parallel_tool_calls"] = False
+        return handler(request)
+
+    async def awrap_model_call(self, request, handler):
+        request.model_settings["parallel_tool_calls"] = False
+        return await handler(request)
+
+# TODO: Convert wrapper style to middleware style for tool invocation counting and remove
+# static MAX_TOOL_CALLS constant.
+MAX_TOOL_CALLS = 2
 
 @wrap_tool_call(state_schema=TrackingState)
 def tool_invocation_counter_middleware(request: ToolCallRequest, handler) -> ToolMessage | Command:
     result = handler(request)
-    return result
-    # count = request.state.get("tool_call_count", 0) + 1
-    # return Command(
-    #     update={
-    #         # Preserve the tool result in the agent message history.
-    #         "messages": [result],
-    #         "tool_call_count": count
-    #     }
-    # )
+
+    count = request.state.get("tool_invocation_count", 0) + 1
+    if count > MAX_TOOL_CALLS:
+        raise Exception(f"Exceeded maximum tool invocations: {count} > {MAX_TOOL_CALLS}")
+
+    return Command(
+        update={
+            # Preserve the tool result in the agent message history.
+            "messages": [result],
+            "tool_invocation_count": count
+        }
+    )
 
 @pytest.mark.skipif(
     not TEST_DATA_DIR.exists(),
@@ -47,28 +67,34 @@ def tool_invocation_counter_middleware(request: ToolCallRequest, handler) -> Too
 )
 class TestCommitClassificationAgent:
 
-    def test_classify_commit_without_change(self):
+    @pytest.mark.parametrize("model_name", ["openai:gpt-4o", "openai:gpt-5.5", "openai:gpt-4o-mini"])
+    def test_classify_commit_without_change(self, model_name):
         # TODO: Examine why endless loop on tool invocation if get before and after commit
         # when using model openai:gpt-4o-mini
         inMemoryCheckPointer = InMemorySaver()
         config = {
             "configurable": {
-                "thread_id": "us-weather"
+                "thread_id": str(uuid.uuid4())
             }
         }
 
-        middleware = [tool_invocation_counter_middleware]
+        middleware = [DisableParallelToolCallsMiddleware(), tool_invocation_counter_middleware]
         tools = [get_content_before_commit, get_content_after_commit]
-        agent = create_agent(middleware=middleware, tools=tools, checkpointer=inMemoryCheckPointer)
+        agent = create_agent(model_name, middleware=middleware, tools=tools, checkpointer=inMemoryCheckPointer)
 
-        # result = agent.invoke(message, config=config)
-        result = agent.invoke({"messages": [{"role": "user", "content": "Call tool get_content_before_commit and get_content_after_commit for commit '90d449e0c3fa65cdcf61dac336121f5586644157', file 'content/en/docs/concepts/services-networking/service.md' in the repo path at " + str(TEST_DATA_DIR) + " and analyse the changes"}]}, config=config)
+        if model_name == "openai:gpt-4o-mini":
+            with pytest.raises(Exception) as excinfo:
+                agent.invoke({"messages": [{"role": "user", "content": "Call tool get_content_before_commit and get_content_after_commit for commit '90d449e0c3fa65cdcf61dac336121f5586644157', file 'content/en/docs/concepts/services-networking/service.md' in the repo path at " + str(TEST_DATA_DIR) + " and analyse the changes"}]}, config=config)
+            assert "Exceeded maximum tool invocations" in str(excinfo.value)
+        else:
+            result = agent.invoke({"messages": [{"role": "user", "content": "Call tool get_content_before_commit and get_content_after_commit for commit '90d449e0c3fa65cdcf61dac336121f5586644157', file 'content/en/docs/concepts/services-networking/service.md' in the repo path at " + str(TEST_DATA_DIR) + " and analyse the changes"}]}, config=config)
+            classified_change = result["structured_response"]
+            print(f"Classified change for commit 90d449e0c3fa65cdcf61dac336121f5586644157: {classified_change}, {classified_change.reason}")
+            assert result["tool_invocation_count"] == 2, f"Expected 2 tool invocations, but got {result['tool_invocation_count']}"
 
-        classified_change = result["structured_response"]
-        print(f"Classified change for commit 90d449e0c3fa65cdcf61dac336121f5586644157: {classified_change}, {classified_change.reason}")
 
     @pytest.mark.skip
-    def test_classify_commit(self):
+    def test_classify_commit(self, model_name):
         repo_path = TEST_DATA_DIR
         since = "1 year ago"
         file_path = "content/en/docs/concepts/services-networking/service.md"
@@ -78,7 +104,7 @@ class TestCommitClassificationAgent:
         inMemoryCheckPointer = InMemorySaver()
         config = {
             "configurable": {
-                "thread_id": "us-weather"
+                "thread_id": str(uuid.uuid4())
             }
         }
 
@@ -101,7 +127,7 @@ class TestCommitClassificationAgent:
         # TODO: Examine why endless loop on tool invocation if get before and after commit content is fetched
         middleware = [tool_invocation_counter_middleware]
         tools = [get_content_before_commit, get_content_after_commit]
-        agent = create_agent(middleware=middleware, tools=tools, checkpointer=inMemoryCheckPointer)
+        agent = create_agent(model_name, middleware=middleware, tools=tools, checkpointer=inMemoryCheckPointer)
 
         # result = agent.invoke(message, config=config)
         result = agent.invoke({"messages": [{"role": "user", "content": "Call tool get_content_before_commit and get_content_after_commit for commit '90d449e0c3fa65cdcf61dac336121f5586644157', file 'content/en/docs/concepts/services-networking/service.md' in the repo path at " + str(repo_path) + " and analyse the changes"}]}, config=config)
