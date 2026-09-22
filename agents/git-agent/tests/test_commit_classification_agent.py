@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import uuid
 
 import pytest
@@ -17,6 +16,8 @@ from langgraph.types import Command
 
 from agent_tools.git import add_changes, ChangeHistory, get_content_after_commit, get_content_before_commit
 from git_agent.commit_classification_agent import create_agent
+
+from tests.system_prompts import SYSTEM_PROMPT_WITH_TOOLS, SYSTEM_PROMPT_WITHOUT_TOOLS
 
 # TODO: Think about general test data for all agents
 TEST_DATA_DIR = (
@@ -91,7 +92,7 @@ class TestCommitClassificationAgent:
         middleware = [DisableParallelToolCallsMiddleware(), tool_invocation_counter_middleware]
         tools = [get_content_before_commit, get_content_after_commit]
         agent = create_agent(model_name, middleware=middleware,
-                             tools=tools, checkpointer=inMemoryCheckPointer)
+                             tools=tools, system_prompt=SYSTEM_PROMPT_WITH_TOOLS, checkpointer=inMemoryCheckPointer)
 
         # Create prompt requesting tool invocations
         commit_hash = "90d449e0c3fa65cdcf61dac336121f5586644157"
@@ -131,44 +132,56 @@ class TestCommitClassificationAgent:
                 f"Expected size to be lower than 2, but got {classified_change.size}"
 
 
-    @pytest.mark.skip
-    def test_classify_commit(self, model_name):
+    @pytest.mark.parametrize("model_name", ["openai:gpt-4o",
+                                            "openai:gpt-5.5", "openai:gpt-4o-mini"])
+    def test_classify_commit_without_tools(self, model_name):
         repo_path = TEST_DATA_DIR
-        since = "1 year ago"
+        commit_hash = "90d449e0c3fa65cdcf61dac336121f5586644157"
         file_path = "content/en/docs/concepts/services-networking/service.md"
-        change_history = ChangeHistory(repo_path=str(repo_path), since=since, file_path=file_path, changes=[])
-        add_changes.func(change_history)
 
-        inMemoryCheckPointer = InMemorySaver()
-        config = {
-            "configurable": {
-                "thread_id": str(uuid.uuid4())
-            }
-        }
+        # Prefetch content change since no tools are available to the agent.
+        content_after_commit = get_content_after_commit.func(commit_hash=commit_hash, repo_path=str(repo_path), file_path=file_path)
 
+        # TODO: Find an easier way to get the change details than getting the whole history
+        change_history: ChangeHistory = ChangeHistory(repo_path=str(repo_path), file_path=file_path, since="1 year ago", changes=[])
+        change_history = add_changes.func(change_history)
+
+        # First commit should be the the same as commit_hash
         change = change_history.changes[0]
-        content_after_commit = get_content_after_commit.func(commit_hash=change.commit_hash, repo_path=str(repo_path), file_path=file_path)
-        message = {
+        assert change.commit_hash == commit_hash
+
+        prompt = {
             "messages": [
                 {
                     "role": "user",
-                    "content": json.dumps(
-                        {
-                            "change": change.model_dump(mode="json"),
-                            "repo_path": str(repo_path)
-                        }
-                    )
+                    "content": (
+                        "Please classify the semantic impact and size of the following change:"
+                        "The change details are:\n"
+                        f"Commit Message: {change.commit_message}\n"
+                        f"========================\n"
+                        f"========================\n"
+                        f"========================\n"
+                        f"Changes done: {change.changes}\n"
+                        f"========================\n"
+                        f"========================\n"
+                        f"========================\n"
+                        f"The content of the file after the commit '{commit_hash}' is:\n"
+                        f"{content_after_commit}"
+                    ),
                 }
             ]
         }
 
-        # TODO: Examine why endless loop on tool invocation if get before and after commit content is fetched
-        middleware = [tool_invocation_counter_middleware]
-        tools = [get_content_before_commit, get_content_after_commit]
-        agent = create_agent(model_name, middleware=middleware, tools=tools, checkpointer=inMemoryCheckPointer)
+        agent = create_agent(model=model_name, middleware=[], tools=[], system_prompt=SYSTEM_PROMPT_WITHOUT_TOOLS)
 
-        # result = agent.invoke(message, config=config)
-        result = agent.invoke({"messages": [{"role": "user", "content": "Call tool get_content_before_commit and get_content_after_commit for commit '90d449e0c3fa65cdcf61dac336121f5586644157', file 'content/en/docs/concepts/services-networking/service.md' in the repo path at " + str(repo_path) + " and analyse the changes"}]}, config=config)
+        result = agent.invoke(prompt)
 
         classified_change = result["structured_response"]
-        print(f"Classified change for commit {change.commit_hash}: {classified_change}, {classified_change.reason}")
+
+        # 4o-mini evaluates semantic change significantly higher.
+        if model_name == "openai:gpt-4o-mini":
+            assert classified_change.semantic_impact >= 4,\
+                f"Expected semantic impact to low"
+        else:
+            assert classified_change.semantic_impact <= 2,\
+                f"Expected semantic impact to high"
