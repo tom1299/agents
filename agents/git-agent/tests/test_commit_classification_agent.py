@@ -30,7 +30,8 @@ TEST_DATA_DIR = (
 class TrackingState(AgentState):
     tool_invocation_count: NotRequired[int]
 
-
+# Workaround for disabling parallel tool calls. See https://github.com/langchain-ai/langchain/issues/34010
+# TODO: Find a better solution, as this one is invoked on every model call, even if no tools are invoked.
 class DisableParallelToolCallsMiddleware(AgentMiddleware):
 
     def wrap_model_call(self, request, handler):
@@ -45,6 +46,9 @@ class DisableParallelToolCallsMiddleware(AgentMiddleware):
 # static MAX_TOOL_CALLS constant.
 MAX_TOOL_CALLS = 2
 
+# TODO: This wrapper updates the state with tool call invocations but
+# when parallel tool calls are enabled, the state is not updated correctly.
+# Examine the issue further.
 @wrap_tool_call(state_schema=TrackingState)
 def tool_invocation_counter_middleware(request: ToolCallRequest, handler) -> ToolMessage | Command:
     result = handler(request)
@@ -67,10 +71,15 @@ def tool_invocation_counter_middleware(request: ToolCallRequest, handler) -> Too
 )
 class TestCommitClassificationAgent:
 
-    @pytest.mark.parametrize("model_name", ["openai:gpt-4o", "openai:gpt-5.5", "openai:gpt-4o-mini"])
-    def test_classify_commit_without_change(self, model_name):
-        # TODO: Examine why endless loop on tool invocation if get before and after commit
-        # when using model openai:gpt-4o-mini
+    @pytest.mark.parametrize("model_name", ["openai:gpt-4o",
+                                            "openai:gpt-5.5", "openai:gpt-4o-mini"])
+    def test_classify_commit_with_tool_invocations(self, model_name):
+        """
+        Test the commit classification agent with tool invocations to get content before and after a commit.
+        """
+
+        # Memory checkpointer needed to count tool invocations,
+        # see wrapper tool_invocation_counter_middleware above.
         inMemoryCheckPointer = InMemorySaver()
         config = {
             "configurable": {
@@ -78,19 +87,48 @@ class TestCommitClassificationAgent:
             }
         }
 
+        # DisableParallelToolCallsMiddleware is needed to avoid concurrent state updates
         middleware = [DisableParallelToolCallsMiddleware(), tool_invocation_counter_middleware]
         tools = [get_content_before_commit, get_content_after_commit]
-        agent = create_agent(model_name, middleware=middleware, tools=tools, checkpointer=inMemoryCheckPointer)
+        agent = create_agent(model_name, middleware=middleware,
+                             tools=tools, checkpointer=inMemoryCheckPointer)
 
+        # Create prompt requesting tool invocations
+        commit_hash = "90d449e0c3fa65cdcf61dac336121f5586644157"
+        file_path = "content/en/docs/concepts/services-networking/service.md"
+        prompt = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Call tool get_content_before_commit and get_content_after_commit "
+                        f"for commit '{commit_hash}', file "
+                        f"'{file_path}' in the "
+                        f"repo path at {TEST_DATA_DIR} and analyse the changes"
+                    ),
+                }
+            ]
+        }
+
+        # 4o-mini enters an endless loop of tool invocations.
         if model_name == "openai:gpt-4o-mini":
             with pytest.raises(Exception) as excinfo:
-                agent.invoke({"messages": [{"role": "user", "content": "Call tool get_content_before_commit and get_content_after_commit for commit '90d449e0c3fa65cdcf61dac336121f5586644157', file 'content/en/docs/concepts/services-networking/service.md' in the repo path at " + str(TEST_DATA_DIR) + " and analyse the changes"}]}, config=config)
+                agent.invoke(prompt, config=config)
             assert "Exceeded maximum tool invocations" in str(excinfo.value)
         else:
-            result = agent.invoke({"messages": [{"role": "user", "content": "Call tool get_content_before_commit and get_content_after_commit for commit '90d449e0c3fa65cdcf61dac336121f5586644157', file 'content/en/docs/concepts/services-networking/service.md' in the repo path at " + str(TEST_DATA_DIR) + " and analyse the changes"}]}, config=config)
+            result = agent.invoke(prompt, config=config)
             classified_change = result["structured_response"]
-            print(f"Classified change for commit 90d449e0c3fa65cdcf61dac336121f5586644157: {classified_change}, {classified_change.reason}")
-            assert result["tool_invocation_count"] == 2, f"Expected 2 tool invocations, but got {result['tool_invocation_count']}"
+
+            # We expect 2 tool invocations: one for get_content_before_commit
+            # and one for get_content_after_commit.
+            assert result["tool_invocation_count"] == 2,\
+                f"Expected 2 tool invocations, but got {result['tool_invocation_count']}"
+
+            # Change should be classified as low impact and small size
+            assert classified_change.semantic_impact <= 2,\
+                f"Expected semantic impact to be lower than 2, but got {classified_change.semantic_impact}"
+            assert classified_change.size <= 2,\
+                f"Expected size to be lower than 2, but got {classified_change.size}"
 
 
     @pytest.mark.skip

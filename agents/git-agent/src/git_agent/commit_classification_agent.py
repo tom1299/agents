@@ -9,15 +9,17 @@ def create_agent(model: str, middleware: list, tools: list, checkpointer=None):
         checkpointer=checkpointer,
         response_format=Classification,
         middleware=middleware,
-        # system_prompt="You receive a Change object representing a commit in a git repository."
-        #               "It contains the commit hash, date, changes (diff), subject, and commit message."
-        #               "Your task is to classify the commit based on"
-        #               "the semantic impact on the overall document / file changed and it size"
-        #               "Return a classification object with the fields size and semantic_impact set."
-        #               "Also add a brief explanation (10-20 words) for the classification in the reason field."
-        #               "You receive the path to the git repository as well. Always use it to read the file content before and after the commit"
-        #               "to determine the size and semantic impact of the change. Use tools get_content_before_commit and get_content_after_commit for that"
-        #               "Only use these tools once per commit."
+        system_prompt="You are a tasked to classify the semantic impact and size of a commit change "
+                      "to a file. You have access to tools that can retrieve the content "
+                      "of a file before and after a specific commit. Use these tools to"
+                      "get the content and analyze the changes and provide a classification." 
+                      "Classify the commit change based on the following criteria:"
+                      "1. Semantic Impact: Rate the semantic impact of the change on a scale from 0 to 10, "
+                      "where 0 indicates no semantic impact and 10 indicates a significant semantic impact."
+                      "2. Size: Rate the size of the change on a scale from 0 to 10, "
+                      "where 0 indicates a small change and 10 indicates a large change."
+                      "3. Reason: Provide a brief explanation for your classification,"
+                      "highlighting the key factors that influenced your assessment."
     )
     return agent_with_middleware
 
