@@ -28,6 +28,10 @@ TEST_DATA_DIR = (
     / "kubernetes-website"
 )
 
+AVAILABLE_LABELS = ["firewall", "service", "ingress", "network-policy",
+                    "endpoint", "load-balancer", "cluster-ip", "node-port",
+                    "external-ip", "headless-service", "pod-selector"]
+
 class TrackingState(AgentState):
     tool_invocation_count: NotRequired[int]
 
@@ -105,7 +109,8 @@ class TestCommitClassificationAgent:
                         "Call tool get_content_before_commit and get_content_after_commit "
                         f"for commit '{commit_hash}', file "
                         f"'{file_path}' in the "
-                        f"repo path at {TEST_DATA_DIR} and analyse the changes"
+                        f"repo path at {TEST_DATA_DIR} and classify the changes"
+                        f"available labels for classification: {AVAILABLE_LABELS}"
                     ),
                 }
             ]
@@ -131,6 +136,8 @@ class TestCommitClassificationAgent:
             assert classified_change.size <= 2,\
                 f"Expected size to be lower than 2, but got {classified_change.size}"
 
+            assert "service" in classified_change.labels, "Expected 'service' label"
+
 
     @pytest.mark.parametrize("model_name", ["openai:gpt-4o",
                                             "openai:gpt-5.5", "openai:gpt-4o-mini"])
@@ -155,9 +162,13 @@ class TestCommitClassificationAgent:
                 {
                     "role": "user",
                     "content": (
-                        "Please classify the semantic impact and size of the following change:"
+                        "Classify the semantic impact and size of the following change:"
                         "The change details are:\n"
                         f"Commit Message: {change.commit_message}\n"
+                        f"========================\n"
+                        f"========================\n"
+                        f"========================\n"
+                        f"Available labels for classification: {AVAILABLE_LABELS}\n"
                         f"========================\n"
                         f"========================\n"
                         f"========================\n"
@@ -185,3 +196,5 @@ class TestCommitClassificationAgent:
         else:
             assert classified_change.semantic_impact <= 2,\
                 f"Expected semantic impact to high"
+
+        assert "service" in classified_change.labels, "Expected 'service' label"

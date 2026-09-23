@@ -29,6 +29,8 @@ class Classification(BaseModel):
     size: int | None = Field(default=None, ge=0, le=10)
     semantic_impact: int | None = Field(default=None, ge=0, le=10)
     reason: str | None = Field(default=None, min_length=1)
+    summary: str | None = Field(default=None, min_length=1)
+    labels: list[str] | None = Field(default=[])
 
 
 class Change(BaseModel):
