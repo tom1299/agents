@@ -19,7 +19,8 @@ class TestGit:
         target_folder = tempfile.mkdtemp()
         repo_url = "https://github.com/tom1299/private"
 
-        success: bool = clone_repository.func(repo_url, target_folder)
+        # TODO: Invoke syntax also works with passing arguments as a dictionary
+        success: bool = clone_repository.invoke({"repo_url": repo_url, "destination_path": target_folder})
         assert success, f"Expected cloning to succeed, but it failed for {repo_url}."
 
         git_folder_path = os.path.join(target_folder, ".git")
