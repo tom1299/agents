@@ -9,6 +9,7 @@ on:
       - "agents-common/**/*.py"
       - "agents/**/pyproject.toml"
       - "agents/**/*.py"
+      - "agents-infrastructure/**/*"
 
 jobs:
   test:
@@ -29,6 +30,8 @@ jobs:
             tests: agents/git-agent/tests
           - project: agents/agent-tools
             tests: agents/agent-tools/tests
+          - project: agents/agents-infrastructure
+            tests: agents/agents-infrastructure/tests
 
     steps:
       - name: Check out code

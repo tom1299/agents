@@ -56,7 +56,7 @@ class TestGitFileHistory:
 
     def test_get_file_commit_history(self) -> None:
         repo_path = TEST_DATA_DIR
-        since = "1 year ago"
+        since = "2025-07-01"
         file_path = "content/en/docs/concepts/services-networking/service.md"
 
         commit_history = get_file_commit_history.func(repo_path, since, file_path)
@@ -66,7 +66,7 @@ class TestGitFileHistory:
 
     def test_get_commit_details_from_history(self):
         repo_path = TEST_DATA_DIR
-        since = "1 year ago"
+        since = "2025-07-01"
         file_path = "content/en/docs/concepts/services-networking/service.md"
 
         commit_history = get_file_commit_history.func(repo_path, since, file_path)

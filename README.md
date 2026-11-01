@@ -9,9 +9,7 @@ A simple repository for agents and agent tools.
 
 ```bash
 uv sync
-uv run --project agents/sample-agent sample-agent
-uv run --project agents/agent-tools agent-tools
-uv run --project agents-common python -m unittest discover -s agents-common/tests -t agents-common
+uv run --package sample-agent --env-file .env pytest agents/sample-agent/tests
 ```
 
 ## Add a new agent

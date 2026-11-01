@@ -1,0 +1,16 @@
+[project]
+name = "agents-infrastructure"
+version = "0.1.0"
+description = "Infrastructure for agents"
+
+requires-python = ">=3.13"
+dependencies = [
+    "agents-common",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+agents-common = { workspace = true }
