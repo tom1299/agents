@@ -6,6 +6,7 @@ description = "Infrastructure for agents"
 requires-python = ">=3.13"
 dependencies = [
     "agents-common",
+    "langchain[mcp]>=1.4.0",
 ]
 
 [build-system]
