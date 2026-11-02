@@ -1,5 +1,6 @@
 ingress:
   enabled: true
+  host: kubernetes-mcp-server
 httpRoute:
   enabled: false
 #service:

@@ -18,15 +18,12 @@ if ! pgrep -f cloud-provider-kind >/dev/null; then
     echo "Started cloud-provider-kind in the background. Logs are in /tmp/cloud-provider-kind.log"
 fi
 
-if helm status "${namespace}" --namespace "${namespace}" >/dev/null 2>&1; then
-    echo "Helm release ${namespace} already installed."
-else
-    helm upgrade --install "${namespace}" \
-        --namespace "${namespace}" --create-namespace \
-        --version 0.1.1 \
-        --values kubernetes-mcp-server-values.yaml \
-        --wait --timeout "${timeout}" \
-        oci://ghcr.io/containers/charts/kubernetes-mcp-server@sha256:263282c4cd1d466edf87e502da277055eebea9b32ecd2471a2ebba3a4b6027eb
+helm upgrade --install "${namespace}" \
+    --namespace "${namespace}" --create-namespace \
+    --version 0.1.1 \
+    --values kubernetes-mcp-server-values.yaml \
+    --wait --timeout "${timeout}" \
+    oci://ghcr.io/containers/charts/kubernetes-mcp-server@sha256:263282c4cd1d466edf87e502da277055eebea9b32ecd2471a2ebba3a4b6027eb
 
-    kubectl wait pod --all --namespace "${namespace}" --for=condition=Ready --timeout="${timeout}"
-fi
+kubectl wait pod --all --namespace "${namespace}" --for=condition=Ready --timeout="${timeout}"
+
