@@ -2,16 +2,19 @@ from fastmcp import Client
 from fastmcp.client import StreamableHttpTransport
 from kubernetes import config, client
 from langchain.mcp import MCPAdapter
-from pytest import mark, fixture
+from pytest import mark, fixture, skip
 
 @fixture
 def kubernetes_mcp_server_ip() -> str:
     # TODO: Move to init of package, get name and namespace from config
-    config.load_kube_config()
-    v1 = client.NetworkingV1Api()
-    ingress = v1.read_namespaced_ingress(name="kubernetes-mcp-server", namespace="kubernetes-mcp-server")
-    ip = ingress.status.load_balancer.ingress[0].ip
-    return ip
+    try:
+        config.load_kube_config()
+        v1 = client.NetworkingV1Api()
+        ingress = v1.read_namespaced_ingress(name="kubernetes-mcp-server", namespace="kubernetes-mcp-server")
+        ip = ingress.status.load_balancer.ingress[0].ip
+        return ip
+    except Exception as exc:
+        skip(f"Kubernetes cluster not reachable: {exc}")
 
 class TestMcp():
 
