@@ -36,6 +36,7 @@ kubectl wait pod --all --namespace "${flux_operator_ns}" --for=condition=Ready -
 
 helm upgrade --install flux-operator-mcp \
   --namespace "${flux_operator_ns}" \
+  --values flux-operator-mcp-values.yaml \
   --wait --timeout "${timeout}" \
   oci://ghcr.io/controlplaneio-fluxcd/charts/flux-operator-mcp:0.62.1@sha256:45ecb9816d751fae12b73940a4f839ea4fe8f5d6fb43ce0989e7f2639e87ffa2
 

@@ -1,0 +1,10 @@
+networkPolicy:
+  create: false
+
+ingress:
+  enabled: true
+  hosts:
+     - host: flux-operator-mcp
+       paths:
+         - path: /
+           pathType: ImplementationSpecific
