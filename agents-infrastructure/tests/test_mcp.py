@@ -58,3 +58,25 @@ class TestMcp():
             for tool in read_only_tools:
                 assert read_only(tool), f"Tool {tool.name} is not read-only as expected."
 
+
+class TestAnalystAgent():
+
+    @mark.asyncio
+    async def test_pod_failure_analysis(self, kubernetes_mcp_server_ip: str, create_temp_namespace) -> None:
+
+        create_temp_namespace("test-pod-failure-analysis")
+
+        transport = StreamableHttpTransport(
+            url=f"http://{kubernetes_mcp_server_ip}/mcp",
+            headers={
+                "Host": "kubernetes-mcp-server"
+            }
+        )
+        client = Client(transport)
+
+        async with MCPAdapter(client) as adapter:
+            tools = await adapter.list_tools()
+            read_only_tools = list(filter(read_only, tools))
+
+            # TODO: Create agent here
+            assert len(read_only_tools) > 0
