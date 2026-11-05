@@ -62,9 +62,9 @@ class TestMcp():
 class TestAnalystAgent():
 
     @mark.asyncio
-    async def test_pod_failure_analysis(self, kubernetes_mcp_server_ip: str, create_temp_namespace) -> None:
+    async def test_pod_failure_analysis(self, kubernetes_mcp_server_ip: str, create_pod_with_faulty_image) -> None:
 
-        create_temp_namespace("test-pod-failure-analysis")
+        create_pod_with_faulty_image("test-pod-failure-analysis", "faulty-pod")
 
         transport = StreamableHttpTransport(
             url=f"http://{kubernetes_mcp_server_ip}/mcp",
