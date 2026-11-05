@@ -2,8 +2,10 @@ from fastmcp import Client
 from fastmcp.client import StreamableHttpTransport
 from kubernetes import config, client
 from langchain.mcp import MCPAdapter
-from langchain_core.tools import BaseTool
 from pytest import mark, fixture, skip
+
+from agents_infrastructure.utils import read_only
+
 
 def get_ingress_ip_v4(ingress_name: str, namespace: str) -> str:
     try:
@@ -28,17 +30,6 @@ def flux_operator_mcp_server_ip() -> str:
         return get_ingress_ip_v4(ingress_name="flux-operator-mcp", namespace="flux-system")
     except Exception as exc:
         skip(f"Kubernetes cluster not reachable: {exc}")
-
-def contains_metadata_annotation(tool: BaseTool, annotation: str) -> bool:
-    annotations = (tool.metadata or {}).get("mcp", {}).get("tool", {}).get("annotations", {})
-    annotation_value = annotations.get(annotation)
-    return annotation_value is not None and annotation_value == True
-
-
-def read_only(tool: BaseTool) -> bool:
-    read_only = contains_metadata_annotation(tool, "read_only_hint")
-    destructive = contains_metadata_annotation(tool, "destructive_hint")
-    return read_only and not destructive
 
 class TestMcp():
 
