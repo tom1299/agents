@@ -5,3 +5,9 @@ httpRoute:
   enabled: false
 #service:
 #  type: NodePort
+rbac:
+  extraClusterRoleBindings:
+    - name: use-view-role
+      roleRef:
+        name: view
+        external: true

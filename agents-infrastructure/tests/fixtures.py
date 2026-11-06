@@ -5,23 +5,19 @@ from pytest import fixture, skip
 
 from kubernetes import config, client
 
-config.load_kube_config()
-core = client.CoreV1Api()
-networking = client.NetworkingV1Api()
-
-def get_ingress_ip_v4(ingress_name: str, namespace: str) -> str:
+def get_ingress_ip_v4(networking_client: client.NetworkingV1Api, ingress_name: str, namespace: str) -> str:
     try:
         config.load_kube_config()
-        ingress = networking.read_namespaced_ingress(name=ingress_name, namespace=namespace)
+        ingress = networking_client.read_namespaced_ingress(name=ingress_name, namespace=namespace)
         ip = ingress.status.load_balancer.ingress[0].ip
         return ip
     except Exception as exc:
         raise RuntimeError(f"Failed to get ingress IP for {ingress_name} in namespace {namespace}: {exc}")
 
-def wait_for_container_waiting_reason(ns: str, pod: str, reasons: set[str], timeout: int = 60) -> str:
+def wait_for_container_waiting_reason(core_client: client.CoreV1Api, ns: str, pod: str, reasons: set[str], timeout: int = 60) -> str:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        statuses = core.read_namespaced_pod(pod, ns).status.container_statuses or []
+        statuses = core_client.read_namespaced_pod(pod, ns).status.container_statuses or []
         for status in statuses:
             waiting = status.state.waiting
             if waiting and waiting.reason in reasons:
@@ -29,26 +25,42 @@ def wait_for_container_waiting_reason(ns: str, pod: str, reasons: set[str], time
         time.sleep(1)
     raise TimeoutError(f"{ns}/{pod} did not reach any of {reasons} within {timeout}s")
 
-@fixture
-def kubernetes_mcp_server_ip() -> str:
+def load_kube_config_or_skip() -> None:
     try:
-        return get_ingress_ip_v4(ingress_name="kubernetes-mcp-server", namespace="kubernetes-mcp-server")
+        config.load_kube_config()
+    except Exception as exc:
+        skip(f"Kubernetes config not available: {exc}")
+
+@fixture
+def k8s_core_client() -> client.CoreV1Api:
+    load_kube_config_or_skip()
+    return client.CoreV1Api()
+
+@fixture
+def k8s_networking_client() -> client.NetworkingV1Api:
+    load_kube_config_or_skip()
+    return client.NetworkingV1Api()
+
+@fixture
+def kubernetes_mcp_server_ip(k8s_networking_client) -> str:
+    try:
+        return get_ingress_ip_v4(k8s_networking_client, ingress_name="kubernetes-mcp-server", namespace="kubernetes-mcp-server")
     except Exception as exc:
         skip(f"Kubernetes cluster not reachable: {exc}")
 
 @fixture
-def flux_operator_mcp_server_ip() -> str:
+def flux_operator_mcp_server_ip(k8s_networking_client) -> str:
     try:
-        return get_ingress_ip_v4(ingress_name="flux-operator-mcp", namespace="flux-system")
+        return get_ingress_ip_v4(k8s_networking_client, ingress_name="flux-operator-mcp", namespace="flux-system")
     except Exception as exc:
         skip(f"Kubernetes cluster not reachable: {exc}")
 
 @fixture
-def create_temp_namespace():
+def create_temp_namespace(k8s_core_client):
     created: list[str] = []
 
     def _create(ns_name: str) -> str:
-        core.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
+        k8s_core_client.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
         created.append(ns_name)
         return ns_name
 
@@ -57,10 +69,10 @@ def create_temp_namespace():
 
     # Runs on tear down, deletes ns
     for ns_to_delete in reversed(created):
-        core.delete_namespace(ns_to_delete)
+        k8s_core_client.delete_namespace(ns_to_delete)
 
 @fixture
-def create_pod_with_faulty_image(create_temp_namespace):
+def create_pod_with_faulty_image(k8s_core_client, create_temp_namespace):
     created_pods: list[client.V1Pod] = []
 
     def _create(ns_name: str, pod_name: str) -> tuple[str, str]:
@@ -71,8 +83,8 @@ def create_pod_with_faulty_image(create_temp_namespace):
                 containers=[client.V1Container(name="nginx", image="nignx:latest")]
             )
         )
-        core.create_namespaced_pod(namespace=ns_name, body=pod_manifest)
-        wait_for_container_waiting_reason(ns_name, pod_name, {"ErrImagePull", "ImagePullBackOff"})
+        k8s_core_client.create_namespaced_pod(namespace=ns_name, body=pod_manifest)
+        wait_for_container_waiting_reason(k8s_core_client, ns_name, pod_name, {"ErrImagePull", "ImagePullBackOff"})
         created_pods.append(pod_manifest)
         return ns_name, pod_name
 
@@ -82,6 +94,6 @@ def create_pod_with_faulty_image(create_temp_namespace):
     # Runs on tear down, deletes pods and namespaces
     for pod_to_delete in reversed(created_pods):
         try:
-            core.delete_namespaced_pod(name=pod_to_delete.metadata.name, namespace=pod_to_delete.metadata.namespace)
+            k8s_core_client.delete_namespaced_pod(name=pod_to_delete.metadata.name, namespace=pod_to_delete.metadata.namespace)
         except Exception as exc:
             logging.warning(f"Failed to delete pod {pod_to_delete} in namespace {pod_to_delete.metadata.namespace}: {exc}")
