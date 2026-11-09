@@ -1,6 +1,7 @@
 from typing import Literal
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentMiddleware
 from langgraph.graph.state import CompiledStateGraph
 
 from pydantic import BaseModel, Field
@@ -21,6 +22,8 @@ class K8sAnalysisAgent:
 
     tools: list
 
+    middleware: list[AgentMiddleware]
+
     system_prompt: str
 
     model: str
@@ -33,5 +36,6 @@ class K8sAnalysisAgent:
             model=self.model,
             tools=self.tools,
             response_format=AnalysisResult,
-            system_prompt=self.system_prompt
+            system_prompt=self.system_prompt,
+            middleware=self.middleware
         )
