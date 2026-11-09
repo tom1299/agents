@@ -48,33 +48,24 @@ class TestAnalystAgent():
         ns = "test-pod-failure-analysis"
         create_pod_with_faulty_image(ns, "faulty-pod")
 
-        transport = StreamableHttpTransport(
-            url=f"http://{kubernetes_mcp_server_ip}/mcp",
-            headers={
-                "Host": "kubernetes-mcp-server"
-            }
-        )
-        client = Client(transport)
+        client = await self.get_kubernetes_mcp_server(kubernetes_mcp_server_ip)
 
         async with MCPAdapter(client) as adapter:
             all_tools = await adapter.list_tools()
             tools: list[BaseTool] = list(filter(read_only, all_tools))
 
-            agent: K8sAnalysisAgent = K8sAnalysisAgent()
-            agent.tools = tools
-            agent.middleware = [ToolMonitoringMiddleware(max_tool_invocations=3)]
-            agent.model = model_name
-            agent.system_prompt = (f"You are a Kubernetes analysis agent. "
-                                   f"You analyze problems and provide insights and "
-                                   f"recommendations for resolution of given problems statements. "
-                                   f"The provided tools connect you to the Kubernetes cluster "
-                                   f"and allow you to gather information about resources."
-                                   f"Your response must be in the format of the AnalysisResult model."
-                                   f"For labels of your response use"
-                                   f"{Label .__args__} and for classification use {Classification.__args__}."
-                                   )
+            system_prompt = (f"You are a Kubernetes analysis agent. "
+                             f"You analyze problems and provide insights and "
+                             f"recommendations for resolution of given problems statements. "
+                             f"The provided tools connect you to the Kubernetes cluster "
+                             f"and allow you to gather information about resources."
+                             f"Your response must be in the format of the AnalysisResult model."
+                             f"For labels of your response use"
+                             f"{Label.__args__} and for classification use {Classification.__args__}."
+                             )
+            max_invocation_middleware = ToolMonitoringMiddleware(max_tool_invocations=3)
 
-            agent.create_analysis_agent()
+            agent = await self.create_agent(model_name, system_prompt, tools, [max_invocation_middleware])
             prompt = {
                 "messages": [
                     {
@@ -95,3 +86,27 @@ class TestAnalystAgent():
             #
             # assert analysis.classification == "image_pull_error"
             # assert set(analysis.labels) == {"pod", "image"}
+
+    async def create_agent(self, model_name: str, system_prompt: str, tools=None, middleware=None) -> K8sAnalysisAgent:
+        if middleware is None:
+            middleware = []
+        if tools is None:
+            tools = []
+
+        agent: K8sAnalysisAgent = K8sAnalysisAgent()
+        agent.tools = tools
+        agent.middleware = middleware
+        agent.model = model_name
+        agent.system_prompt = system_prompt
+        agent.create_analysis_agent()
+        return agent
+
+    async def get_kubernetes_mcp_server(self, kubernetes_mcp_server_ip: str) -> Client[StreamableHttpTransport]:
+        transport = StreamableHttpTransport(
+            url=f"http://{kubernetes_mcp_server_ip}/mcp",
+            headers={
+                "Host": "kubernetes-mcp-server"
+            }
+        )
+        client = Client(transport)
+        return client
