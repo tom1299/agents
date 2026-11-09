@@ -13,6 +13,8 @@ from pytest import mark, raises
 
 from agents_infrastructure.agents.analysis_agent import K8sAnalysisAgent, Classification, Label, AnalysisResult
 from agents_infrastructure.utils import read_only
+from tests import prompts
+
 
 class ToolMonitoringMiddleware(AgentMiddleware):
 
@@ -54,15 +56,7 @@ class TestAnalystAgent():
             all_tools = await adapter.list_tools()
             tools: list[BaseTool] = list(filter(read_only, all_tools))
 
-            system_prompt = (f"You are a Kubernetes analysis agent. "
-                             f"You analyze problems and provide insights and "
-                             f"recommendations for resolution of given problems statements. "
-                             f"The provided tools connect you to the Kubernetes cluster "
-                             f"and allow you to gather information about resources."
-                             f"Your response must be in the format of the AnalysisResult model."
-                             f"For labels of your response use"
-                             f"{Label.__args__} and for classification use {Classification.__args__}."
-                             )
+            system_prompt = prompts.POD_ANALYSIS_FAILING_SYSTEM_PROMPTS["gpt-4o-mini"]
             max_invocation_middleware = ToolMonitoringMiddleware(max_tool_invocations=5)
 
             agent = await self.create_agent(model_name, system_prompt, tools, [max_invocation_middleware])
@@ -95,18 +89,7 @@ class TestAnalystAgent():
             all_tools = await adapter.list_tools()
             tools: list[BaseTool] = list(filter(read_only, all_tools))
 
-            system_prompt = (f"You are a Kubernetes analysis agent. "
-                             f"You analyze problems and provide insights and "
-                             f"recommendations for resolution of given problems statements. "
-                             f"The provided tools connect you to the Kubernetes cluster "
-                             f"and allow you to gather information about resources."
-                             f"Your response must be in the format of the AnalysisResult model."
-                             f"For analysis labels of your response use"
-                             f"{Label.__args__} and for classification use {Classification.__args__}."
-                             f"Important: For kubernetes tool tool calls with labels, "
-                             f"for finding failing resources, first use no labels at all ("") but rather status for filtering"
-                             f"e.g. status.phase!=\"Running\""
-                             )
+            system_prompt = prompts.POD_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
             max_invocation_middleware = ToolMonitoringMiddleware(max_tool_invocations=10)
 
             agent = await self.create_agent(model_name, system_prompt, tools, [max_invocation_middleware])
