@@ -14,6 +14,7 @@ Kind based Kubernetes cluster for testing agents and agent infrastructure.
   * Create separate file for system prompts ✅
   * Examine different models time to solve the problem and tool invocations needed ✅
   * How does memory help with troubleshooting when storing previously troubleshooting steps and their results in a vector database ?
+* Examine mcp human in the loop example: https://docs.langchain.com/oss/python/langchain/mcp/tools#human-in-the-loop
 * Speed up fixture deleting pods and namespace
 * Move tools creation to fixtures / utils methods
 * Examine authentication and authorization for flux operator mcp server and k8s mcp server
