@@ -11,8 +11,8 @@ Kind based Kubernetes cluster for testing agents and agent infrastructure.
 * Create agent to test troubleshooting a simple problem:
   * Use basic models ✅
   * Capture and assert tool invocations
-  * Create separate file for system prompts
-  * Examine different models time to solve the problem and tool invocations needed
+  * Create separate file for system prompts ✅
+  * Examine different models time to solve the problem and tool invocations needed ✅
   * How does memory help with troubleshooting when storing previously troubleshooting steps and their results in a vector database ?
 * Speed up fixture deleting pods and namespace
 * Move tools creation to fixtures / utils methods

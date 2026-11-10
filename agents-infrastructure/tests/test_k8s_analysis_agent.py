@@ -1,3 +1,5 @@
+import re
+
 from collections.abc import Callable, Awaitable
 from typing import Any
 
@@ -16,14 +18,27 @@ from agents_infrastructure.utils import read_only
 from tests import prompts
 
 
-class ToolMonitoringMiddleware(AgentMiddleware):
+LABEL_SELECTOR_PATTERN = re.compile(r"^([a-zA-Z0-9](?:[\w.\-]{0,61}[a-zA-Z0-9])?)=([a-zA-Z0-9](?:[\w.\-]{0,61}[a-zA-Z0-9])?)?$")
+
+class ToolCallValidationMiddleware(AgentMiddleware):
 
     tool_invocations: int = 0
 
     max_tool_invocations: int
 
-    def __init__(self, max_tool_invocations: int) -> None:
+    validate_selector: bool = False
+
+    def __init__(self, max_tool_invocations: int, validate_selector: bool = False) -> None:
         self.max_tool_invocations = max_tool_invocations
+        self.validate_selector = validate_selector
+
+    def validate_label_selector(self, request: ToolCallRequest) -> None:
+        if self.validate_selector and "labelSelector" in request.tool_call["args"]:
+            label_selector = request.tool_call["args"]["labelSelector"]
+            if label_selector is not None:
+                # TODO: Add some sanity checks for label selector, e.g. length, pattern, etc.
+                if len(label_selector) > 20 or LABEL_SELECTOR_PATTERN.match(label_selector):
+                    request.tool_call["args"]["labelSelector"] = ""
 
     async def awrap_tool_call(
         self,
@@ -31,12 +46,12 @@ class ToolMonitoringMiddleware(AgentMiddleware):
         handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
     ) -> ToolMessage | Command[Any]:
 
+        self.validate_label_selector(request)
         self.tool_invocations += 1
         if self.tool_invocations > self.max_tool_invocations:
             raise Exception(f"Exceeded maximum tool invocations: {self.max_tool_invocations}")
         try:
             result = await handler(request)
-            print("Tool completed successfully")
             return result
         except Exception as e:
             raise
@@ -56,8 +71,8 @@ class TestAnalystAgent():
             all_tools = await adapter.list_tools()
             tools: list[BaseTool] = list(filter(read_only, all_tools))
 
-            system_prompt = prompts.POD_ANALYSIS_FAILING_SYSTEM_PROMPTS["gpt-4o-mini"]
-            max_invocation_middleware = ToolMonitoringMiddleware(max_tool_invocations=5)
+            system_prompt = prompts.POD_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
+            max_invocation_middleware = ToolCallValidationMiddleware(max_tool_invocations=5, validate_selector=False)
 
             agent = await self.create_agent(model_name, system_prompt, tools, [max_invocation_middleware])
             prompt = {
@@ -88,9 +103,10 @@ class TestAnalystAgent():
         async with MCPAdapter(client) as adapter:
             all_tools = await adapter.list_tools()
             tools: list[BaseTool] = list(filter(read_only, all_tools))
+            self.enhance_pod_list_tools_description(tools)
 
             system_prompt = prompts.POD_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
-            max_invocation_middleware = ToolMonitoringMiddleware(max_tool_invocations=10)
+            max_invocation_middleware = ToolCallValidationMiddleware(max_tool_invocations=4, validate_selector=True)
 
             agent = await self.create_agent(model_name, system_prompt, tools, [max_invocation_middleware])
             prompt = {
@@ -137,3 +153,17 @@ class TestAnalystAgent():
         )
         client = Client(transport)
         return client
+
+    def enhance_pod_list_tools_description(self, tools: list[BaseTool]) -> None:
+        for tool in tools:
+            if tool.name == "pods_list_in_namespace":
+                tool.description = (
+                    "This tool lists all pods in a given namespace. "
+                    "It takes a single argument 'namespace' which is the name of the namespace to list pods from. "
+                    "The output is a JSON array of pod names."
+                )
+                tool.args["labelSelector"] = {
+                    'description': "Optional Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)' or '' for all pods), use this option when you want to filter the pods by label.",
+                    'pattern': "^([a-zA-Z0-9](?:[\\w.\\-]{0,61}[a-zA-Z0-9])?)=([a-zA-Z0-9](?:[\\w.\\-]{0,61}[a-zA-Z0-9])?)?$",
+                    'type': 'string'
+                }
