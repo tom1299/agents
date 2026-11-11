@@ -6,8 +6,8 @@ from langgraph.graph.state import CompiledStateGraph
 
 from pydantic import BaseModel, Field
 
-Classification = Literal["image_pull_error", "crash_loop", "oom_killed", "unknown"]
-Label = Literal["pod", "image", "network", "resources"]
+Classification = Literal["image_pull_error", "crash_loop", "oom_killed", "unschedulable"]
+Label = Literal["pod", "image", "network", "resources", "deployment", "configuration"]
 
 class AnalysisResult(BaseModel):
     summary: str = Field(min_length=1, max_length=500)

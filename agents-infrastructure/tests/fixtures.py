@@ -3,6 +3,7 @@ import time
 import yaml
 from pathlib import Path
 
+from langchain.chat_models import init_chat_model
 from pytest import fixture, skip
 
 from kubernetes import config, client
@@ -43,6 +44,16 @@ def load_kube_config_or_skip() -> None:
         config.load_kube_config()
     except Exception as exc:
         skip(f"Kubernetes config not available: {exc}")
+
+@fixture
+def create_model():
+    def _create(model_name: str):
+        kwargs = {}
+        # TODO: This is a temporary workaround for the fact that tools + reasoning are not supported on chat completions. Once this is fixed, we can remove this.
+        if model_name.startswith("openai:"):
+            kwargs["reasoning_effort"] = "none"  # tools + reasoning unsupported on chat completions
+        return init_chat_model(model_name, **kwargs)
+    return _create
 
 @fixture
 def k8s_core_client() -> client.CoreV1Api:
