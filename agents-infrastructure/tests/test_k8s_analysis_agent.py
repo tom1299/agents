@@ -130,6 +130,13 @@ class TestAnalystAgent():
             assert set(analysis.labels) == {"pod", "image"}
 
 
+    @mark.asyncio
+    @mark.parametrize("model_name", ["openai:gpt-4o-mini"])
+    async def test_deployment_failing_due_to_affinity_analysis(self, kubernetes_mcp_server_ip: str, create_deployment_failing_due_to_affinity, model_name) -> None:
+        ns = "internet-portal"
+        create_deployment_failing_due_to_affinity(ns, "webserver")
+
+
     async def create_agent(self, model_name: str, system_prompt: str, tools=None, middleware=None) -> K8sAnalysisAgent:
         if middleware is None:
             middleware = []

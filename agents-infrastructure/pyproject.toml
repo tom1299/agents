@@ -7,7 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     "agents-common",
     "langchain[mcp]>=1.4.0",
-    "kubernetes>=37.0.1"
+    "kubernetes>=37.0.1",
+    "pyyaml>=6.0.3",
 ]
 
 [build-system]

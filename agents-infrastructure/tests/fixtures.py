@@ -1,9 +1,13 @@
 import logging
 import time
+import yaml
+from pathlib import Path
 
 from pytest import fixture, skip
 
 from kubernetes import config, client
+
+TEST_MANIFESTS_DIR = Path(__file__).parent / "test-manifests"
 
 def get_ingress_ip_v4(networking_client: client.NetworkingV1Api, ingress_name: str, namespace: str) -> str:
     try:
@@ -25,6 +29,15 @@ def wait_for_container_waiting_reason(core_client: client.CoreV1Api, ns: str, po
         time.sleep(1)
     raise TimeoutError(f"{ns}/{pod} did not reach any of {reasons} within {timeout}s")
 
+def wait_for_deployment_replicas_ready(apps_client: client.AppsV1Api, ns: str, deployment: str, expected_replicas: int, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        dep = apps_client.read_namespaced_deployment(deployment, ns)
+        if dep.status.ready_replicas == expected_replicas:
+            return
+        time.sleep(1)
+    raise TimeoutError(f"{ns}/{deployment} did not have {expected_replicas} ready replicas within {timeout}s")
+
 def load_kube_config_or_skip() -> None:
     try:
         config.load_kube_config()
@@ -35,6 +48,11 @@ def load_kube_config_or_skip() -> None:
 def k8s_core_client() -> client.CoreV1Api:
     load_kube_config_or_skip()
     return client.CoreV1Api()
+
+@fixture
+def k8s_apps_client() -> client.AppsV1Api:
+    load_kube_config_or_skip()
+    return client.AppsV1Api()
 
 @fixture
 def k8s_networking_client() -> client.NetworkingV1Api:
@@ -97,3 +115,27 @@ def create_pod_with_faulty_image(k8s_core_client, create_temp_namespace):
             k8s_core_client.delete_namespaced_pod(name=pod_to_delete.metadata.name, namespace=pod_to_delete.metadata.namespace)
         except Exception as exc:
             logging.warning(f"Failed to delete pod {pod_to_delete} in namespace {pod_to_delete.metadata.namespace}: {exc}")
+
+@fixture
+def create_deployment_failing_due_to_affinity(k8s_apps_client, create_temp_namespace):
+    created_deployments: list[tuple[str, str]] = []
+
+    def _create(ns_name: str, deployment_name: str) -> tuple[str, str]:
+        create_temp_namespace(ns_name)
+        with open(TEST_MANIFESTS_DIR / "deployment-failing-due-to-affinity.yaml", "r") as f:
+            deployment_manifest = yaml.safe_load(f)
+        deployment_manifest["metadata"]["name"] = deployment_name
+        k8s_apps_client.create_namespaced_deployment(namespace=ns_name, body=deployment_manifest)
+        wait_for_deployment_replicas_ready(k8s_apps_client, ns_name, deployment_name, expected_replicas=1)
+        created_deployments.append((ns_name, deployment_name))
+        return ns_name, deployment_name
+
+    # Returns function to create deployment
+    yield _create
+
+    # Runs on tear down, deletes deployments and namespaces
+    for ns_to_delete, deployment_to_delete in reversed(created_deployments):
+        try:
+            k8s_apps_client.delete_namespaced_deployment(name=deployment_to_delete, namespace=ns_to_delete)
+        except Exception as exc:
+            logging.warning(f"Failed to delete deployment {deployment_to_delete} in namespace {ns_to_delete}: {exc}")

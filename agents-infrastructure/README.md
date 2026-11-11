@@ -13,8 +13,10 @@ Kind based Kubernetes cluster for testing agents and agent infrastructure.
   * Capture and assert tool invocations
   * Create separate file for system prompts ✅
   * Examine different models time to solve the problem and tool invocations needed ✅
+  * Examine tool callbacks: https://www.geeksforgeeks.org/artificial-intelligence/langchain-callbacks/
   * How does memory help with troubleshooting when storing previously troubleshooting steps and their results in a vector database ?
-* Examine mcp human in the loop example: https://docs.langchain.com/oss/python/langchain/mcp/tools#human-in-the-loop
+* Examine mcp human in the loop example: https://docs.langchain.com/oss/python/langchain/mcp/tools#human-in-the-loop Test case moved to langchain-tutorial repo ✅
+* Look at k8s Dynamic Client: https://deepwiki.com/kubernetes-client/python/3.4-dynamic-client
 * Speed up fixture deleting pods and namespace
 * Move tools creation to fixtures / utils methods
 * Examine authentication and authorization for flux operator mcp server and k8s mcp server
