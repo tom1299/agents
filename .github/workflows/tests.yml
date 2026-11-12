@@ -30,8 +30,8 @@ jobs:
             tests: agents/git-agent/tests
           - project: agents/agent-tools
             tests: agents/agent-tools/tests
-          - project: agents/agents-infrastructure
-            tests: agents/agents-infrastructure/tests
+          - project: agents-infrastructure
+            tests: agents-infrastructure/tests
 
     steps:
       - name: Check out code
