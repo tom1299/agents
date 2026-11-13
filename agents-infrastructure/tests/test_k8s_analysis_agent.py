@@ -56,7 +56,7 @@ class ToolCallValidationMiddleware(AgentMiddleware):
         except Exception as e:
             raise
 
-class TestAnalystAgent():
+class TestAnalystAgent:
 
     @mark.asyncio
     @mark.parametrize("model_name", ["openai:gpt-4o-mini"])

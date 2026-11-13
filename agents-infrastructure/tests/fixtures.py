@@ -6,7 +6,7 @@ from pathlib import Path
 from langchain.chat_models import init_chat_model
 from pytest import fixture, skip
 
-from kubernetes import config, client
+from kubernetes import config, client, dynamic
 
 TEST_MANIFESTS_DIR = Path(__file__).parent / "test-manifests"
 
@@ -39,6 +39,24 @@ def wait_for_deployment_replicas_ready(apps_client: client.AppsV1Api, ns: str, d
         time.sleep(1)
     raise TimeoutError(f"{ns}/{deployment} did not have {expected_replicas} ready replicas within {timeout}s")
 
+def wait_for_pods_running(core_client: client.CoreV1Api, ns: str, label_selector: str, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        pods = core_client.list_namespaced_pod(ns, label_selector=label_selector).items
+        if pods and all(pod.status.phase == "Running" for pod in pods):
+            return
+        time.sleep(1)
+    raise TimeoutError(f"Not all pods in namespace {ns} with label selector {label_selector} are running within {timeout}s")
+
+def wait_for_pod_deletion(core_client: client.CoreV1Api, ns: str, label_selector: str, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        pods = core_client.list_namespaced_pod(ns, label_selector=label_selector).items
+        if not pods:
+            return
+        time.sleep(1)
+    raise TimeoutError(f"Pods in namespace {ns} with label selector {label_selector} were not deleted within {timeout}s")
+
 def load_kube_config_or_skip() -> None:
     try:
         config.load_kube_config()
@@ -69,6 +87,12 @@ def k8s_apps_client() -> client.AppsV1Api:
 def k8s_networking_client() -> client.NetworkingV1Api:
     load_kube_config_or_skip()
     return client.NetworkingV1Api()
+
+@fixture
+def k8s_dynamic_client() -> dynamic.DynamicClient:
+    load_kube_config_or_skip()
+    k8s_client = client.ApiClient()
+    return dynamic.DynamicClient(k8s_client)
 
 @fixture
 def kubernetes_mcp_server_ip(k8s_networking_client) -> str:
@@ -150,3 +174,26 @@ def create_deployment_failing_due_to_affinity(k8s_apps_client, create_temp_names
             k8s_apps_client.delete_namespaced_deployment(name=deployment_to_delete, namespace=ns_to_delete)
         except Exception as exc:
             logging.warning(f"Failed to delete deployment {deployment_to_delete} in namespace {ns_to_delete}: {exc}")
+
+@fixture
+def create_flux_instance(k8s_dynamic_client, k8s_core_client) :
+
+    flux_api = k8s_dynamic_client.resources.get(api_version='fluxcd.controlplane.io/v1', kind='FluxInstance')
+
+    def _create(instance_manifest: str) -> None:
+        with open(TEST_MANIFESTS_DIR / instance_manifest, "r") as f:
+            flux_manifest = yaml.safe_load(f)
+
+        flux_api.create(namespace="flux-system", body=flux_manifest)
+
+        wait_for_pods_running(k8s_core_client, ns="flux-system", label_selector="app.kubernetes.io/part-of=flux", timeout=120)
+
+    # Returns function to create flux instance
+    yield _create
+
+    # Runs on tear down, deletes instances and namespaces
+    try:
+        flux_api.delete(name="flux", namespace="flux-system")
+        wait_for_pod_deletion(k8s_core_client, ns="flux-system", label_selector="app.kubernetes.io/part-of=flux", timeout=120)
+    except Exception as exc:
+        logging.warning(f"Failed to delete flux instance flux in namespace flux-system: {exc}")
