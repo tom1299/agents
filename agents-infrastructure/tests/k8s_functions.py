@@ -1,0 +1,85 @@
+import time
+
+from kubernetes import client
+from kubernetes.client import V1EphemeralContainer
+
+def get_ingress_ip_v4(networking_client: client.NetworkingV1Api, ingress_name: str, namespace: str) -> str:
+    try:
+        ingress = networking_client.read_namespaced_ingress(name=ingress_name, namespace=namespace)
+        ip = ingress.status.load_balancer.ingress[0].ip
+        return ip
+    except Exception as exc:
+        raise RuntimeError(f"Failed to get ingress IP for {ingress_name} in namespace {namespace}: {exc}")
+
+def wait_for_container_waiting_reason(core_client: client.CoreV1Api, ns: str, pod: str, reasons: set[str], timeout: int = 60) -> str:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        statuses = core_client.read_namespaced_pod(pod, ns).status.container_statuses or []
+        for status in statuses:
+            waiting = status.state.waiting
+            if waiting and waiting.reason in reasons:
+                return waiting.reason
+        time.sleep(1)
+    raise TimeoutError(f"{ns}/{pod} did not reach any of {reasons} within {timeout}s")
+
+def wait_for_deployment_replicas_ready(apps_client: client.AppsV1Api, ns: str, deployment: str, expected_replicas: int, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        dep = apps_client.read_namespaced_deployment(deployment, ns)
+        if dep.status.ready_replicas == expected_replicas:
+            return
+        time.sleep(1)
+    raise TimeoutError(f"{ns}/{deployment} did not have {expected_replicas} ready replicas within {timeout}s")
+
+def wait_for_pods_running(core_client: client.CoreV1Api, ns: str, label_selector: str, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        pods = core_client.list_namespaced_pod(ns, label_selector=label_selector).items
+        if pods and all(pod.status.phase == "Running" for pod in pods):
+            return
+        time.sleep(1)
+    raise TimeoutError(f"Not all pods in namespace {ns} with label selector {label_selector} are running within {timeout}s")
+
+def wait_for_pod_deletion(core_client: client.CoreV1Api, ns: str, label_selector: str, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        pods = core_client.list_namespaced_pod(ns, label_selector=label_selector).items
+        if not pods:
+            return
+        time.sleep(1)
+    raise TimeoutError(f"Pods in namespace {ns} with label selector {label_selector} were not deleted within {timeout}s")
+
+def apply_debug_patch(core_client: client.CoreV1Api, pod: client.V1Pod, name, image) -> client.V1Pod:
+    debug_container = V1EphemeralContainer(
+        name=name,
+        image=image,
+        command=["echo", "hello"],
+        security_context=client.V1SecurityContext(
+            allow_privilege_escalation=False,
+            capabilities=client.V1Capabilities(drop=["ALL"]),
+            run_as_non_root=True,
+            seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
+            run_as_user=3000
+        ),
+    )
+
+    container_json = core_client.api_client.sanitize_for_serialization(debug_container)
+
+    path = "/spec/ephemeralContainers"
+    value = [container_json]
+    if pod.spec.ephemeral_containers:
+        path += "/-"
+        value = container_json
+
+    return core_client.patch_namespaced_pod_ephemeralcontainers(
+        name=pod.metadata.name,
+        namespace=pod.metadata.namespace,
+        body=[{"op": "add", "path": path, "value": value}],
+        _content_type="application/json-patch+json",
+    )
+
+def get_ephemeral_container_status(core_client: client.CoreV1Api, ns: str, pod: str, container_name: str) -> client.V1ContainerStatus:
+    statuses = core_client.read_namespaced_pod(pod, ns).status.ephemeral_container_statuses or []
+    for status in statuses:
+        if status.name == container_name:
+            return status
