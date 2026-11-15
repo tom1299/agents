@@ -17,7 +17,7 @@ spec:
     type: kubernetes
     size: small
     multitenant: false
-    networkPolicy: true
+    networkPolicy: false
     domain: "cluster.local"
   sync:
     kind: GitRepository

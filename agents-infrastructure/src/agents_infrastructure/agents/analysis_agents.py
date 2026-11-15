@@ -6,7 +6,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from pydantic import BaseModel, Field
 
-Classification = Literal["image_pull_error", "crash_loop", "oom_killed", "unschedulable"]
+Classification = Literal["image_pull_error", "crash_loop", "oom_killed", "unschedulable", "flux_operator", "unknown"]
 Label = Literal["pod", "image", "network", "resources", "deployment", "configuration"]
 
 class AnalysisResult(BaseModel):
@@ -16,7 +16,7 @@ class AnalysisResult(BaseModel):
     classification: Classification
     labels: set[Label]
 
-class K8sAnalysisAgent:
+class AnalysisAgent:
 
     agent: CompiledStateGraph
 
