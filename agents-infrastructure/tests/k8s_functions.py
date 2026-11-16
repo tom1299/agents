@@ -49,17 +49,25 @@ def wait_for_pod_deletion(core_client: client.CoreV1Api, ns: str, label_selector
         time.sleep(1)
     raise TimeoutError(f"Pods in namespace {ns} with label selector {label_selector} were not deleted within {timeout}s")
 
-def apply_debug_patch(core_client: client.CoreV1Api, pod: client.V1Pod, name, image) -> client.V1Pod:
+def apply_debug_patch(core_client: client.CoreV1Api, pod: client.V1Pod, name, image, command: list) -> client.V1Pod:
     debug_container = V1EphemeralContainer(
         name=name,
         image=image,
-        command=["echo", "hello"],
+        command=command,
         security_context=client.V1SecurityContext(
             allow_privilege_escalation=False,
             capabilities=client.V1Capabilities(drop=["ALL"]),
             run_as_non_root=True,
             seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
-            run_as_user=3000
+            # TODO: Instead of setting the user name, examine possible error messages when
+            # ephemeral container is attached:
+            # state:
+            # waiting:
+            # message: 'container has runAsNonRoot and image will run as root (pod: "test-pod_test-debug-patch(891650af-d46b-45c7-8b03-f78266061ddf)",
+            # container: debug - container - 885
+            # f1f71)'
+            # reason: CreateContainerConfigError
+            run_as_user=1000
         ),
     )
 
