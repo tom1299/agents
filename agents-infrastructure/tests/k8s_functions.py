@@ -86,6 +86,12 @@ def apply_debug_patch(core_client: client.CoreV1Api, pod: client.V1Pod, name, im
         _content_type="application/json-patch+json",
     )
 
+def debug_pod(core_client: client.CoreV1Api, pod_name: str, namespace: str, debug_container_name,
+                      image, command: list) -> dict:
+    pod = core_client.read_namespaced_pod(pod_name, namespace)
+    updated_pod = apply_debug_patch(core_client, pod, debug_container_name, image, command)
+    return core_client.api_client.sanitize_for_serialization(updated_pod)
+
 def get_ephemeral_container_status(core_client: client.CoreV1Api, ns: str, pod: str, container_name: str) -> client.V1ContainerStatus:
     statuses = core_client.read_namespaced_pod(pod, ns).status.ephemeral_container_statuses or []
     for status in statuses:

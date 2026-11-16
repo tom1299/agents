@@ -2,7 +2,7 @@ import uuid
 
 from kubernetes import client
 
-from tests.k8s_functions import apply_debug_patch, get_ephemeral_container_status
+from tests.k8s_functions import debug_pod, get_ephemeral_container_status
 
 class TestK8sFunctions:
 
@@ -17,12 +17,11 @@ class TestK8sFunctions:
         debug_container_names = [f"debug-container-{uuid.uuid4().hex[:8]}" for _ in range(2)]
         for debug_container_name in debug_container_names:
 
-            pod = k8s_core_client.read_namespaced_pod(name=pod_name, namespace=ns)
-
+            k8s_core_client.read_namespaced_pod(name=pod_name, namespace=ns)
             command = ["echo", f"hello from {debug_container_name}"]
-            updated_pod = apply_debug_patch(k8s_core_client, pod, debug_container_name, debug_image, command)
+            updated_pod: dict = debug_pod(k8s_core_client, pod_name, ns, debug_container_name, debug_image, command)
 
-            assert any(container.name == debug_container_name for container in updated_pod.spec.ephemeral_containers)
+            assert any(container["name"] == debug_container_name for container in updated_pod["spec"]["ephemeralContainers"])
 
             terminated = False
             while not terminated:
