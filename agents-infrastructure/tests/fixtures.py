@@ -7,7 +7,7 @@ from pytest import fixture, skip
 
 from kubernetes import client, dynamic, config
 
-from tests.k8s_functions import get_ingress_ip_v4, wait_for_container_waiting_reason, \
+from agents_infrastructure.k8s_functions import get_ingress_ip_v4, wait_for_container_waiting_reason, \
     wait_for_deployment_replicas_ready, wait_for_pods_running, wait_for_pod_deletion
 
 TEST_MANIFESTS_DIR = Path(__file__).parent / "test-manifests"

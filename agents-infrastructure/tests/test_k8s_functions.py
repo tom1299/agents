@@ -2,7 +2,7 @@ import uuid
 
 from kubernetes import client
 
-from tests.k8s_functions import debug_pod, get_ephemeral_container_status
+from agents_infrastructure.k8s_functions import debug_pod, get_ephemeral_container_status
 
 class TestK8sFunctions:
 

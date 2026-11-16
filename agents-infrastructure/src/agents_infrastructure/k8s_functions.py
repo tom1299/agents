@@ -1,7 +1,12 @@
 import time
 
-from kubernetes import client
+from kubernetes import client, config
 from kubernetes.client import V1EphemeralContainer
+
+# TODO: Currently also used in fixtures of tests => unify
+def k8s_core_client() -> client.CoreV1Api:
+    config.load_kube_config()
+    return client.CoreV1Api()
 
 def get_ingress_ip_v4(networking_client: client.NetworkingV1Api, ingress_name: str, namespace: str) -> str:
     try:

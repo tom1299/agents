@@ -18,6 +18,8 @@ Kind based Kubernetes cluster for testing agents and agent infrastructure.
   * Create setup for flux operator mcp server testing ✅
   * Create test case for flux operator mcp server using langchain agent ✅
   * Refactor tool middleware so that it can take multiple validation / collection functions (chain of responsibility pattern) ✅
+  * Finish local kubectl debug tool
+  * Look at merge request for kubernetes mcp server. Possible ?
 * Examine mcp human in the loop example: https://docs.langchain.com/oss/python/langchain/mcp/tools#human-in-the-loop Test case moved to langchain-tutorial repo ✅
 * Look at k8s Dynamic Client: https://deepwiki.com/kubernetes-client/python/3.4-dynamic-client ✅
 * Speed up fixture deleting pods and namespace
