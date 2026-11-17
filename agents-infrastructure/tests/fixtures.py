@@ -6,6 +6,8 @@ from langchain.chat_models import init_chat_model
 from pytest import fixture, skip
 
 from kubernetes import client, dynamic, config
+from kubernetes.dynamic.exceptions import NotFoundError
+from kubernetes.client.rest import ApiException
 
 from agents_infrastructure.k8s_functions import get_ingress_ip_v4, wait_for_container_waiting_reason, \
     wait_for_deployment_replicas_ready, wait_for_pods_running, wait_for_pod_deletion
@@ -27,6 +29,12 @@ def create_model():
             kwargs["reasoning_effort"] = "none"  # tools + reasoning unsupported on chat completions
         return init_chat_model(model_name, **kwargs)
     return _create
+
+@fixture
+def k8s_api_client():
+    load_kube_config_or_skip()
+    with client.ApiClient() as api_client:
+        yield api_client
 
 @fixture
 def k8s_core_client() -> client.CoreV1Api:
@@ -182,3 +190,46 @@ def create_flux_instance(k8s_dynamic_client, k8s_core_client) :
         wait_for_pod_deletion(k8s_core_client, ns="flux-system", label_selector="app.kubernetes.io/part-of=flux", timeout=120)
     except Exception as exc:
         logging.warning(f"Failed to delete flux instance flux in namespace flux-system: {exc}")
+
+@fixture
+def apply_manifest(k8s_api_client, create_temp_namespace):
+    dynamic_client = dynamic.DynamicClient(k8s_api_client)
+    applied = []
+
+    def _apply(manifest: str, namespace: str) -> None:
+        create_temp_namespace(namespace)
+        with open(TEST_MANIFESTS_DIR / manifest, "r") as manifest_file:
+            documents = [document for document in yaml.safe_load_all(manifest_file) if document is not None]
+        if not documents:
+            raise ValueError(f"No resources in manifest: {manifest}")
+
+        resources = []
+        for document in documents:
+            resource = dynamic_client.resources.get(
+                api_version=document["apiVersion"], kind=document["kind"]
+            )
+            metadata = document["metadata"]
+            if not resource.namespaced:
+                raise ValueError(f"Cluster-scoped resource not supported: {document['kind']}")
+            if metadata.get("namespace", namespace) != namespace:
+                raise ValueError(f"Namespace mismatch for {document['kind']}/{metadata['name']}")
+            resources.append((resource, document, metadata["name"]))
+
+        for resource, document, name in resources:
+            applied.append((resource, name, namespace))
+            resource.server_side_apply(
+                body=document, namespace=namespace, field_manager="python-client"
+            )
+
+    yield _apply
+
+    errors = []
+    for resource, name, namespace in reversed(applied):
+        try:
+            resource.delete(name=name, namespace=namespace)
+        except NotFoundError:
+            continue
+        except ApiException as exc:
+            errors.append(exc)
+    if errors:
+        raise Exception(f"Failed to delete manifest resources: {errors}")

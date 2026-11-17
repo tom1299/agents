@@ -1,8 +1,10 @@
+from langchain.agents.factory import STRUCTURED_OUTPUT_ERROR_TEMPLATE
 from langchain.mcp import MCPAdapter
-from langchain_core.tools import BaseTool
+from langchain_core.tools import BaseTool, StructuredTool
 from pytest import mark, raises
 
 from agents_infrastructure.agents.analysis_agents import AnalysisResult
+from agents_infrastructure.k8s_functions import debug_pod
 from agents_infrastructure.utils import read_only
 from tests import prompts
 from tests.base import BaseTestClass
@@ -121,6 +123,46 @@ class TestAnalystAgent(BaseTestClass):
 
             assert analysis.classification == "unschedulable"
             assert "deployment" in analysis.labels
+
+    @mark.asyncio
+    @mark.parametrize("model_name", ["openai:gpt-6-luna"])
+    async def test_connectivity_issue_analysis(self, kubernetes_mcp_server_ip: str, apply_manifest, create_model, model_name) -> None:
+        ns = "webapp"
+        apply_manifest("frontend-backend-app.yaml", ns)
+
+        client = await self.get_kubernetes_mcp_server(kubernetes_mcp_server_ip)
+
+        async with MCPAdapter(client) as adapter:
+            all_tools = await adapter.list_tools()
+            tools: list[BaseTool] = list(filter(read_only, all_tools))
+            debug_pod_tool = StructuredTool.from_function(debug_pod)
+            tools.extend([debug_pod_tool])
+
+            system_prompt = prompts.POD_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
+            max_invocation_middleware = ToolCallValidationMiddleware(max_tool_invocations=10, validate_selector=True)
+
+            agent = await self.create_agent(create_model(model_name), system_prompt, tools, [max_invocation_middleware])
+            prompt = {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Interim connectivity failures have been reported between frontend"
+                            f" and backend in the namespace {ns}\n"
+                            f"Check if the connectivity issue is still present"
+                        ),
+                    }
+                ]
+            }
+
+            response = await agent.agent.ainvoke(prompt)
+
+            analysis: AnalysisResult = response["structured_response"]
+
+            # TODO: Assert that debug_pod has been invoked
+            assert analysis.classification == "unknown"
+            assert "network" in analysis.labels
+
 
     def enhance_pod_list_tools_description(self, tools: list[BaseTool]) -> None:
         for tool in tools:

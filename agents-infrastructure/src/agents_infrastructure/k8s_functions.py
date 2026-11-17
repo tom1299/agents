@@ -137,18 +137,31 @@ def apply_debug_patch(core_client: client.CoreV1Api, pod: client.V1Pod, name, im
         _content_type="application/json-patch+json",
     )
 
-def debug_pod(core_client: client.CoreV1Api, pod_name: str, namespace: str, debug_container_name,
+def debug_pod(pod_name: str, namespace: str, debug_container_name,
                       image, command: list) -> str:
-    pod = core_client.read_namespaced_pod(pod_name, namespace)
-    apply_debug_patch(core_client, pod, debug_container_name, image, command)
+    """
+    Run a command in an ephemeral debug container within a specified pod.
+    Similar to `kubectl debug`.
+    :param pod_name: Name of the pod to debug
+    :param namespace: Namespace of the pod
+    :param debug_container_name: Name of the ephemeral container to add
+    :param image: The image for the ephemeral container. E.g "busybox:latest"
+    :param command: List of command and arguments to run in the ephemeral container e.g. ["echo", "hello"]
+    :return: The output of the command run in the ephemeral container
+    """
 
-    wait_for_ephemeral_container_running(core_client, namespace, pod_name, debug_container_name, timeout=60)
-    wait_for_ephemeral_container_terminated(core_client, namespace, pod_name, debug_container_name, timeout=60)
+    pod = k8s_core_client().read_namespaced_pod(pod_name, namespace)
+    apply_debug_patch(k8s_core_client(), pod, debug_container_name, image, command)
 
-    return core_client.read_namespaced_pod_log(name=pod_name, namespace=namespace, container=debug_container_name)
+    wait_for_ephemeral_container_running(k8s_core_client(), namespace, pod_name, debug_container_name, timeout=60)
+    wait_for_ephemeral_container_terminated(k8s_core_client(), namespace, pod_name, debug_container_name, timeout=60)
+
+    return k8s_core_client().read_namespaced_pod_log(name=pod_name, namespace=namespace, container=debug_container_name)
 
 def get_ephemeral_container_status(core_client: client.CoreV1Api, ns: str, pod: str, container_name: str) -> client.V1ContainerStatus:
     statuses = core_client.read_namespaced_pod(pod, ns).status.ephemeral_container_statuses or []
     for status in statuses:
         if status.name == container_name:
             return status
+
+    return None
