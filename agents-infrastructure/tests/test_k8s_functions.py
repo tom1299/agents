@@ -19,24 +19,7 @@ class TestK8sFunctions:
 
             k8s_core_client.read_namespaced_pod(name=pod_name, namespace=ns)
             command = ["echo", f"hello from {debug_container_name}"]
-            updated_pod: dict = debug_pod(k8s_core_client, pod_name, ns, debug_container_name, debug_image, command)
-
-            assert any(container["name"] == debug_container_name for container in updated_pod["spec"]["ephemeralContainers"])
-
-            terminated = False
-            while not terminated:
-                status = get_ephemeral_container_status(k8s_core_client, ns, pod_name, debug_container_name)
-                if status and status.state.terminated:
-                    terminated = True
-                else:
-                    import time
-                    time.sleep(1)
-
-            logs = k8s_core_client.read_namespaced_pod_log(
-                name=pod_name,
-                namespace=ns,
-                container=debug_container_name,
-            )
-            assert logs.strip() == f"hello from {debug_container_name}"
+            output = debug_pod(k8s_core_client, pod_name, ns, debug_container_name, debug_image, command)
+            assert output.strip() == f"hello from {debug_container_name}"
 
         # TODO: Check order of ephemeral containers in the pod

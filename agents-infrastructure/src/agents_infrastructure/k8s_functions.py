@@ -3,6 +3,17 @@ import time
 from kubernetes import client, config
 from kubernetes.client import V1EphemeralContainer
 
+# TODO: Complete this list
+terminal_waiting_reasons = {
+    "ErrImagePull",
+    "ImagePullBackOff",
+    "InvalidImageName",
+    "CreateContainerConfigError",
+    "CreateContainerError",
+    "RunContainerError",
+    "CrashLoopBackOff"
+}
+
 # TODO: Currently also used in fixtures of tests => unify
 def k8s_core_client() -> client.CoreV1Api:
     config.load_kube_config()
@@ -26,6 +37,41 @@ def wait_for_container_waiting_reason(core_client: client.CoreV1Api, ns: str, po
                 return waiting.reason
         time.sleep(1)
     raise TimeoutError(f"{ns}/{pod} did not reach any of {reasons} within {timeout}s")
+
+def wait_for_container_running(core_client: client.CoreV1Api, ns: str, pod: str, container: str, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        statuses = core_client.read_namespaced_pod(pod, ns).status.container_statuses or []
+        for status in statuses:
+            if status.name == container and status.state.running:
+                if is_terminal_container_state(status.state):
+                    raise RuntimeError(f"{ns}/{pod}/{container} reached terminal state: {status.state}")
+                return
+        time.sleep(1)
+    raise TimeoutError(f"{ns}/{pod}/{container} did not reach running state within {timeout}s")
+
+def wait_for_ephemeral_container_running(core_client: client.CoreV1Api, ns: str, pod: str, container: str, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        statuses = core_client.read_namespaced_pod(pod, ns).status.ephemeral_container_statuses or []
+        for status in statuses:
+            if status.name == container and (status.state.running or status.state.terminated):
+                return
+        time.sleep(1)
+    raise TimeoutError(f"{ns}/{pod}/{container} did not reach running state within {timeout}s")
+
+def wait_for_ephemeral_container_terminated(core_client: client.CoreV1Api, ns: str, pod: str, container: str, timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        statuses = core_client.read_namespaced_pod(pod, ns).status.ephemeral_container_statuses or []
+        for status in statuses:
+            if status.name == container and status.state.terminated:
+                return
+        time.sleep(1)
+    raise TimeoutError(f"{ns}/{pod}/{container} did not reach terminated state within {timeout}s")
+
+# def is_terminal_container_state(state: client.V1ContainerState) -> bool:
+#     return state.terminated is not None or state.waiting is not None and state.waiting.reason in terminal_waiting_reasons
 
 def wait_for_deployment_replicas_ready(apps_client: client.AppsV1Api, ns: str, deployment: str, expected_replicas: int, timeout: int = 60) -> None:
     deadline = time.monotonic() + timeout
@@ -92,10 +138,14 @@ def apply_debug_patch(core_client: client.CoreV1Api, pod: client.V1Pod, name, im
     )
 
 def debug_pod(core_client: client.CoreV1Api, pod_name: str, namespace: str, debug_container_name,
-                      image, command: list) -> dict:
+                      image, command: list) -> str:
     pod = core_client.read_namespaced_pod(pod_name, namespace)
-    updated_pod = apply_debug_patch(core_client, pod, debug_container_name, image, command)
-    return core_client.api_client.sanitize_for_serialization(updated_pod)
+    apply_debug_patch(core_client, pod, debug_container_name, image, command)
+
+    wait_for_ephemeral_container_running(core_client, namespace, pod_name, debug_container_name, timeout=60)
+    wait_for_ephemeral_container_terminated(core_client, namespace, pod_name, debug_container_name, timeout=60)
+
+    return core_client.read_namespaced_pod_log(name=pod_name, namespace=namespace, container=debug_container_name)
 
 def get_ephemeral_container_status(core_client: client.CoreV1Api, ns: str, pod: str, container_name: str) -> client.V1ContainerStatus:
     statuses = core_client.read_namespaced_pod(pod, ns).status.ephemeral_container_statuses or []
