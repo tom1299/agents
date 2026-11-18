@@ -13,7 +13,7 @@ from tests.middleware import ToolCallValidationMiddleware
 
 class TestAnalystAgent(BaseTestClass):
 
-    @mark.asyncio
+    @mark.asyncio(loop_scope="session")
     @mark.parametrize("model_name", ["openai:gpt-4o-mini"])
     @mark.skip(reason="Models seem to no longer exceed the max tool invocations")
     async def test_pod_failure_analysis_to_many_tool_requests(self, kubernetes_mcp_server_ip: str, create_pod_with_faulty_image, model_name: str) -> None:
@@ -47,7 +47,7 @@ class TestAnalystAgent(BaseTestClass):
             with raises(Exception, match="Exceeded maximum tool invocations"):
                 await agent.agent.ainvoke(prompt)
 
-    @mark.asyncio
+    @mark.asyncio(loop_scope="session")
     @mark.parametrize("model_name", ["openai:gpt-4o-mini"])
     async def test_pod_failure_analysis(self, kubernetes_mcp_server_ip: str, create_pod_with_faulty_image, model_name: str) -> None:
 
@@ -87,7 +87,7 @@ class TestAnalystAgent(BaseTestClass):
             assert "image" in analysis.labels
 
 
-    @mark.asyncio
+    @mark.asyncio(loop_scope="session")
     @mark.parametrize("model_name", ["openai:gpt-6-luna"])
     async def test_deployment_failing_due_to_affinity_analysis(self, kubernetes_mcp_server_ip: str, create_deployment_failing_due_to_affinity, create_model, model_name) -> None:
         ns = "internet-portal"
@@ -124,7 +124,7 @@ class TestAnalystAgent(BaseTestClass):
             assert analysis.classification == "unschedulable"
             assert "deployment" in analysis.labels
 
-    @mark.asyncio
+    @mark.asyncio(loop_scope="session")
     @mark.parametrize("model_name", ["openai:gpt-6-luna"])
     async def test_connectivity_issue_analysis(self, kubernetes_mcp_server_ip: str, apply_manifest, create_model, model_name) -> None:
         ns = "webapp"

@@ -11,7 +11,7 @@ from tests.middleware import ToolCallValidationMiddleware
 
 class TestFluxOperatorAnalysisAgent(BaseTestClass):
 
-    @mark.asyncio
+    @mark.asyncio(loop_scope="session")
     @mark.parametrize("model_name", ["openai:gpt-6-luna"])
     async def test_flux_operator_analysis_agent(self, create_flux_instance, flux_operator_mcp_server_ip, create_model, model_name: str) -> None:
         create_flux_instance("flux-instance.yaml")
