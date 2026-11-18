@@ -18,6 +18,10 @@ build-backend = "uv_build"
 [tool.uv.sources]
 agents-common = { workspace = true }
 
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",

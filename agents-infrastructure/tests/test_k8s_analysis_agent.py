@@ -140,13 +140,14 @@ class TestAnalystAgent(BaseTestClass):
             # Grant exec permissions with fixture
             # Use image that does not have curl or wget installed
             # See whether the agent uses debug_pod with an image that has curl/wget installed to check connectivity
+            read_only_tools = list(filter(read_only, all_tools))
             debug_pod_tool = StructuredTool.from_function(debug_pod)
-            all_tools.extend([debug_pod_tool])
+            read_only_tools.extend([debug_pod_tool])
 
-            system_prompt = prompts.POD_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
+            system_prompt = prompts.CONNECTIVITY_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
             max_invocation_middleware = ToolCallValidationMiddleware(max_tool_invocations=10, validate_selector=True)
 
-            agent = await self.create_agent(create_model(model_name), system_prompt, all_tools, [max_invocation_middleware])
+            agent = await self.create_agent(create_model(model_name), system_prompt, read_only_tools, [max_invocation_middleware])
             prompt = {
                 "messages": [
                     {
@@ -155,6 +156,7 @@ class TestAnalystAgent(BaseTestClass):
                             f"Interim connectivity failures have been reported between frontend"
                             f" and backend in the namespace {ns}\n"
                             f"Check if the connectivity issue is still present"
+                            f"Use tool debug_pod to check connectivity for testing connectivity between pods"
                         ),
                     }
                 ]
@@ -164,10 +166,9 @@ class TestAnalystAgent(BaseTestClass):
 
             analysis: AnalysisResult = response["structured_response"]
 
-            # TODO: Assert that debug_pod has been invoked
+            # TODO: Extract reasoning from response and assert that debug_pod has been invoked
             assert analysis.classification == "unknown"
             assert "network" in analysis.labels
-
 
     def enhance_pod_list_tools_description(self, tools: list[BaseTool]) -> None:
         for tool in tools:

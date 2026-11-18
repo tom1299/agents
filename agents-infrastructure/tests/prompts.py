@@ -25,6 +25,17 @@ POD_ANALYSIS_SYSTEM_PROMPTS = {
         """
 }
 
+CONNECTIVITY_ANALYSIS_SYSTEM_PROMPTS = {
+    "gpt-6-luna": f"""
+        You are a Kubernetes analysis agent. You analyze problems and provide insights
+        and recommendations for resolution of connectivity issue between pods or to external services.
+        The provided tools connect you to the Kubernetes cluster and allow
+        you to gather information about resources. Your response must be in the format of the
+        AnalysisResult model. For classification labels of your response use values from
+        {Label.__args__} and for itself classification use values from {Classification.__args__}.
+        """
+}
+
 FLUX_OPERATOR_ANALYSIS_SYSTEM_PROMPTS = {
     "gpt-6-luna": f"""
         You are an Flux operator analysis agent. You analyze problems and provide insights

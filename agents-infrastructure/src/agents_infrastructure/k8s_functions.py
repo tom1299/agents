@@ -137,17 +137,16 @@ def apply_debug_patch(core_client: client.CoreV1Api, pod: client.V1Pod, name, im
         _content_type="application/json-patch+json",
     )
 
-def debug_pod(pod_name: str, namespace: str, debug_container_name,
-                      image, command: list) -> str:
-    """
-    Run a command in an ephemeral debug container within a specified pod.
-    Similar to `kubectl debug`.
-    :param pod_name: Name of the pod to debug
-    :param namespace: Namespace of the pod
-    :param debug_container_name: Name of the ephemeral container to add
-    :param image: The image for the ephemeral container. E.g "busybox:latest"
-    :param command: List of command and arguments to run in the ephemeral container e.g. ["echo", "hello"]
-    :return: The output of the command run in the ephemeral container
+def debug_pod(pod_name: str, namespace: str, debug_container_name:str,
+                      image:str, command: list[str]) -> str:
+    """Run a command in an ephemeral debug container. Similar to `kubectl debug`
+
+    Args:
+        pod_name: Name of the pod to debug.
+        namespace: Namespace containing the pod.
+        debug_container_name: Name for the debug container.
+        image: Debug container image, for example "busybox:latest".
+        command: Command and arguments to run in the container.
     """
 
     pod = k8s_core_client().read_namespaced_pod(pod_name, namespace)

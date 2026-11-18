@@ -81,4 +81,4 @@ class TestMcp():
                 "namespace": namespace,
                 "command": ["echo", "Hello, World!"]
             })
-            assert result[0]['text'] == "Hello, World!"
+            assert result[0]['text'].strip() == "Hello, World!"

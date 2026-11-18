@@ -22,58 +22,58 @@ def load_kube_config_or_skip() -> None:
     except Exception as exc:
         skip(f"Kubernetes config not available: {exc}")
 
-@fixture
+@fixture(scope="function")
 def create_model():
     def _create(model_name: str):
         kwargs = {}
-        # TODO: This is a temporary workaround for the fact that tools + reasoning are not supported on chat completions. Once this is fixed, we can remove this.
+        # # TODO: This is a temporary workaround for the fact that tools + reasoning are not supported on chat completions. Once this is fixed, we can remove this.
         if model_name.startswith("openai:"):
-            kwargs["reasoning_effort"] = "none"  # tools + reasoning unsupported on chat completions
+            kwargs["reasoning"] = {"effort": "high", "summary": "auto"}  # tools + reasoning unsupported on chat completions
         return init_chat_model(model_name, **kwargs)
     return _create
 
-@fixture
+@fixture(scope="function")
 def k8s_api_client():
     load_kube_config_or_skip()
     with client.ApiClient() as api_client:
         yield api_client
 
-@fixture
+@fixture(scope="function")
 def k8s_core_client() -> client.CoreV1Api:
     load_kube_config_or_skip()
     return client.CoreV1Api()
 
-@fixture
+@fixture(scope="function")
 def k8s_apps_client() -> client.AppsV1Api:
     load_kube_config_or_skip()
     return client.AppsV1Api()
 
-@fixture
+@fixture(scope="function")
 def k8s_networking_client() -> client.NetworkingV1Api:
     load_kube_config_or_skip()
     return client.NetworkingV1Api()
 
-@fixture
+@fixture(scope="function")
 def k8s_dynamic_client() -> dynamic.DynamicClient:
     load_kube_config_or_skip()
     k8s_client = client.ApiClient()
     return dynamic.DynamicClient(k8s_client)
 
-@fixture
+@fixture(scope="function")
 def kubernetes_mcp_server_ip(k8s_networking_client) -> str:
     try:
         return get_ingress_ip_v4(k8s_networking_client, ingress_name="kubernetes-mcp-server", namespace="kubernetes-mcp-server")
     except Exception as exc:
         skip(f"Kubernetes cluster not reachable: {exc}")
 
-@fixture
+@fixture(scope="function")
 def flux_operator_mcp_server_ip(k8s_networking_client) -> str:
     try:
         return get_ingress_ip_v4(k8s_networking_client, ingress_name="flux-operator-mcp", namespace="flux-system")
     except Exception as exc:
         skip(f"Kubernetes cluster not reachable: {exc}")
 
-@fixture
+@fixture(scope="function")
 def create_temp_namespace(k8s_core_client):
     created: list[str] = []
 
@@ -89,7 +89,7 @@ def create_temp_namespace(k8s_core_client):
     for ns_to_delete in reversed(created):
         k8s_core_client.delete_namespace(ns_to_delete)
 
-@fixture
+@fixture(scope="function")
 def create_pod_with_faulty_image(k8s_core_client, create_temp_namespace):
     created_pods: list[client.V1Pod] = []
 
@@ -117,7 +117,7 @@ def create_pod_with_faulty_image(k8s_core_client, create_temp_namespace):
             logging.warning(f"Failed to delete pod {pod_to_delete} in namespace {pod_to_delete.metadata.namespace}: {exc}")
 
 # TODO: Create a generic fixture for creating pods with conditions for waiting.
-@fixture
+@fixture(scope="function")
 def create_pod_with_image(k8s_core_client, create_temp_namespace):
     created_pods: list[client.V1Pod] = []
 
@@ -146,7 +146,7 @@ def create_pod_with_image(k8s_core_client, create_temp_namespace):
             logging.warning(f"Failed to delete pod {pod_to_delete} in namespace {pod_to_delete.metadata.namespace}: {exc}")
 
 
-@fixture
+@fixture(scope="function")
 def create_deployment_failing_due_to_affinity(k8s_apps_client, create_temp_namespace):
     created_deployments: list[tuple[str, str]] = []
 
@@ -170,7 +170,7 @@ def create_deployment_failing_due_to_affinity(k8s_apps_client, create_temp_names
         except Exception as exc:
             logging.warning(f"Failed to delete deployment {deployment_to_delete} in namespace {ns_to_delete}: {exc}")
 
-@fixture
+@fixture(scope="function")
 def create_flux_instance(k8s_dynamic_client, k8s_core_client) :
 
     flux_api = k8s_dynamic_client.resources.get(api_version='fluxcd.controlplane.io/v1', kind='FluxInstance')
@@ -193,7 +193,7 @@ def create_flux_instance(k8s_dynamic_client, k8s_core_client) :
     except Exception as exc:
         logging.warning(f"Failed to delete flux instance flux in namespace flux-system: {exc}")
 
-@fixture
+@fixture(scope="function")
 def apply_manifest(k8s_api_client, create_temp_namespace):
     dynamic_client = dynamic.DynamicClient(k8s_api_client)
     applied = []
@@ -236,7 +236,7 @@ def apply_manifest(k8s_api_client, create_temp_namespace):
     if errors:
         raise Exception(f"Failed to delete manifest resources: {errors}")
 
-@fixture
+@fixture(scope="function")
 def bind_cluster_role_to_sa(k8s_dynamic_client):
 
     role_bindings_api = k8s_dynamic_client.resources.get(

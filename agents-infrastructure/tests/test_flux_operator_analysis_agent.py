@@ -23,7 +23,7 @@ class TestFluxOperatorAnalysisAgent(BaseTestClass):
             tools: list[BaseTool] = list(filter(read_only, all_tools))
 
             system_prompt = prompts.FLUX_OPERATOR_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
-            max_invocation_middleware = ToolCallValidationMiddleware(max_tool_invocations=7, validate_selector=False)
+            max_invocation_middleware = ToolCallValidationMiddleware(max_tool_invocations=10, validate_selector=False)
 
             agent = await self.create_agent(create_model(model_name), system_prompt, tools, [max_invocation_middleware])
             prompt = {

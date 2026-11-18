@@ -19,7 +19,7 @@ class TestK8sFunctions:
 
             k8s_core_client.read_namespaced_pod(name=pod_name, namespace=ns)
             command = ["echo", f"hello from {debug_container_name}"]
-            output = debug_pod(k8s_core_client, pod_name, ns, debug_container_name, debug_image, command)
+            output = debug_pod(pod_name, ns, debug_container_name, debug_image, command)
             assert output.strip() == f"hello from {debug_container_name}"
 
         # TODO: Check order of ephemeral containers in the pod
