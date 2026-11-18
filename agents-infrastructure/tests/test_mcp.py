@@ -57,3 +57,28 @@ class TestMcp():
             assert len(read_only_tools) == 10, f"Expected 10 read-only tools, but found {len(read_only_tools)}."
             for tool in read_only_tools:
                 assert read_only(tool), f"Tool {tool.name} is not read-only as expected."
+
+    @mark.asyncio
+    async def test_kubernetes_mcp_server_permissions(self, kubernetes_mcp_server_ip: str, create_pod_with_image, bind_cluster_role_to_sa) -> None:
+
+        transport = StreamableHttpTransport(
+            url=f"http://{kubernetes_mcp_server_ip}/mcp",
+            headers={
+                "Host": "kubernetes-mcp-server"
+            }
+        )
+        client = Client(transport)
+
+        async with MCPAdapter(client) as adapter:
+            tools = await adapter.list_tools()
+            exec_in_pod_tool = next((tool for tool in tools if tool.name == "pods_exec"), None)
+            assert exec_in_pod_tool
+
+            namespace, pod_name = create_pod_with_image("test-permissions", "test-pod", "nginx:latest")
+            bind_cluster_role_to_sa("kubernetes-mcp-server", "kubernetes-mcp-server", namespace, "edit")
+            result = await exec_in_pod_tool.ainvoke({
+                "name": pod_name,
+                "namespace": namespace,
+                "command": ["echo", "Hello, World!"]
+            })
+            assert result[0]['text'] == "Hello, World!"

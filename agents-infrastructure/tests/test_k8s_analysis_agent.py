@@ -134,14 +134,19 @@ class TestAnalystAgent(BaseTestClass):
 
         async with MCPAdapter(client) as adapter:
             all_tools = await adapter.list_tools()
-            tools: list[BaseTool] = list(filter(read_only, all_tools))
+            # TODO: Seems that debug_pod is not used when exec is available.
+            # => Analysis less accurate
+            # Try test case:
+            # Grant exec permissions with fixture
+            # Use image that does not have curl or wget installed
+            # See whether the agent uses debug_pod with an image that has curl/wget installed to check connectivity
             debug_pod_tool = StructuredTool.from_function(debug_pod)
-            tools.extend([debug_pod_tool])
+            all_tools.extend([debug_pod_tool])
 
             system_prompt = prompts.POD_ANALYSIS_SYSTEM_PROMPTS[model_name.split(":")[1]]
             max_invocation_middleware = ToolCallValidationMiddleware(max_tool_invocations=10, validate_selector=True)
 
-            agent = await self.create_agent(create_model(model_name), system_prompt, tools, [max_invocation_middleware])
+            agent = await self.create_agent(create_model(model_name), system_prompt, all_tools, [max_invocation_middleware])
             prompt = {
                 "messages": [
                     {

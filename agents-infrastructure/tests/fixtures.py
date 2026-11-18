@@ -1,4 +1,6 @@
 import logging
+import time
+
 import yaml
 from pathlib import Path
 
@@ -233,3 +235,53 @@ def apply_manifest(k8s_api_client, create_temp_namespace):
             errors.append(exc)
     if errors:
         raise Exception(f"Failed to delete manifest resources: {errors}")
+
+@fixture
+def bind_cluster_role_to_sa(k8s_dynamic_client):
+
+    role_bindings_api = k8s_dynamic_client.resources.get(
+        api_version="rbac.authorization.k8s.io/v1",
+        kind="RoleBinding",
+    )
+
+    create_binding: tuple[str, str]
+    def _create(sa_name, sa_ns, target_ns, cluster_role_name):
+        nonlocal create_binding
+        created_binding = f"{sa_name}-to-{cluster_role_name}-binding"
+
+        role_bindings_api.create(
+            namespace=target_ns,
+            body={
+                "apiVersion": "rbac.authorization.k8s.io/v1",
+                "kind": "RoleBinding",
+                "metadata": {
+                    "name": created_binding,
+                    "namespace": target_ns
+                },
+                "roleRef": {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "ClusterRole",
+                    "name": cluster_role_name,
+                },
+                "subjects": [{
+                    "kind": "ServiceAccount",
+                    "name": sa_name,
+                    "namespace": sa_ns,
+                }],
+            },
+        )
+        create_binding = (created_binding, target_ns)
+
+        # TODO Create equivalent kubectl auth can-i check
+        # instead of sleep
+        time.sleep(0.5)  # Wait for RBAC propagation
+
+    yield _create
+
+    # Runs on tear down, deletes role binding
+    if create_binding:
+        binding_name, target_ns = create_binding
+        try:
+            role_bindings_api.delete(name=binding_name, namespace=target_ns)
+        except Exception as exc:
+            logging.warning(f"Failed to delete role binding {binding_name} in namespace {target_ns}: {exc}")

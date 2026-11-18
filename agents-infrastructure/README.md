@@ -21,6 +21,7 @@ Kind based Kubernetes cluster for testing agents and agent infrastructure.
   * Finish local kubectl debug tool ✅
   * Make agent use the debug tool to troubleshoot ✅
   * **Refactor / consolidate k8s functions to reduce duplication(s) and code and improve maintainability**
+  * Create extended test case for troubleshooting connectivity issues => See TODOs 
   * Look at merge request for kubernetes mcp server. Possible ?
 * Examine mcp human in the loop example: https://docs.langchain.com/oss/python/langchain/mcp/tools#human-in-the-loop Test case moved to langchain-tutorial repo ✅
 * Look at k8s Dynamic Client: https://deepwiki.com/kubernetes-client/python/3.4-dynamic-client ✅
